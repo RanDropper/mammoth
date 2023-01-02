@@ -84,15 +84,19 @@ class DataProcessing:
             self.embed_encoder_info = {}
             
             for col in embed_feat:
-                tmp = embed_data[[col]].drop_duplicates()
-                tmp['LabeL'] = np.random.normal(size=tmp.shape[0])
-                self.embed_encoder_info[col] = tmp
+                if embed_data[col].dtypes in [float, int]:
+                    embed_data[col] /= np.max(np.abs(embed_data[col]))
+                else:
+                    tmp = embed_data[[col]].drop_duplicates()
+                    tmp['LabeL'] = np.random.normal(size=tmp.shape[0])
+                    self.embed_encoder_info[col] = tmp
         
         embed_data = seq_key_frame.merge(embed_data, how='left')
         for col in embed_feat:
-            embed_data = pd.merge(embed_data, self.embed_encoder_info[col], how='left', on=[col]).fillna({'LabeL':0})
-            embed_data[col] = embed_data['LabeL'].copy()
-            embed_data.drop(columns=['LabeL'], inplace=True)
+            if embed_data[col].dtypes not in [float, int]:
+                embed_data = pd.merge(embed_data, self.embed_encoder_info[col], how='left', on=[col]).fillna({'LabeL':0})
+                embed_data[col] = embed_data['LabeL'].copy()
+                embed_data.drop(columns=['LabeL'], inplace=True)
         return embed_data
 
     
@@ -298,7 +302,7 @@ class DatasetBuilder(DataProcessing):
             embed_data = None
 
         val_rate = self.input_settings.get('val_rate')
-        
+
         if val_rate is not None:
             remainder = int( seq_len * val_rate)
             self.input_settings['remainder'] = remainder

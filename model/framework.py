@@ -2,7 +2,6 @@ import tensorflow as tf
 from tensorflow.keras.layers import Concatenate, ZeroPadding1D, Lambda, Reshape
 from tensorflow.keras.optimizers import *
 import tensorflow.keras.backend as k
-from tensorflow.keras import Model
 from tensorflow.keras.callbacks import EarlyStopping
 from mammoth.networks.normalization import RevIN, InstanceNormalization
 from mammoth.utils import scatter_update, compute_normal_mean, compute_normal_std, compute_normal_max, compute_normal_min

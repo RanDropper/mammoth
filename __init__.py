@@ -26,7 +26,7 @@ def single_tsm(input_settings, train_settings,
             * weighted_metrics -> Same parameter in 'tensorflow.keras.model.Model.compile'. default: ['mae', PearsonCoef].
             * batch_size -> Same parameter in 'tensorflow.keras.model.Model.fit'. default: 16.
             * epochs -> Same parameter in 'tensorflow.keras.model.Model.fit'. default: 1000.
-            * callbacks' -> Same parameter in 'tensorflow.keras.model.Model.fit'. For detail in defining your own callback functino, 
+            * callbacks -> Same parameter in 'tensorflow.keras.model.Model.fit'. For detail in defining your own callback functino,
                             please refer to 'tensorflow.keras.callbacks'. default: [EarlyStopping(monitor='loss', patience=10)].
             * verbose -> Same parameter in 'tensorflow.keras.model.Model.fit'. default: 1.
             * validation_steps -> Same parameter in 'tensorflow.keras.model.Model.fit'. default: None.
