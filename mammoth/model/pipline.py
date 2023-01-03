@@ -154,9 +154,36 @@ class ModelPipeline(metaclass = abc.ABCMeta):
                            shuffle = shuffle,
                            use_multiprocessing = use_multiprocessing,
                            verbose = verbose)
-            
-    
-    def predict(self, fcst_dataset, batch_size = None):
+
+    def predict_rolling(self, fcst_dataset, perc_horizon, fcst_horizon, batch_size=None):
+        pred = []
+        for i, tmp_dataset in enumerate(fcst_dataset):
+            if i > 0:
+                if len(pred) > 1:
+                    former_pred = np.concatenate(pred, axis=1)
+                else:
+                    former_pred = pred[0]
+
+                seq_input = np.array(list(tmp_dataset.map(lambda x: x[0]).as_numpy_iterator()))
+                embed_input = tmp_dataset.map(lambda x: x[1])
+                masking_input = tmp_dataset.map(lambda x: x[2])
+                seq_input[:, -fcst_horizon * (i + 1):-fcst_horizon, 0:1] = former_pred[:, -min(fcst_horizon * i, perc_horizon):, :]
+                seq_input = tf.data.Dataset.from_tensor_slices(seq_input)
+
+                tmp_dataset = tf.data.Dataset.zip((seq_input, embed_input, masking_input))
+                tmp_dataset = tf.data.Dataset.zip((tmp_dataset,))
+
+            tmp_pred = self.fcst_model.predict(tmp_dataset.batch(batch_size))
+            tmp_pred = tmp_pred.reshape((tmp_pred.shape[0], tmp_pred.shape[2], tmp_pred.shape[3]))
+            pred.append(tmp_pred)
+
+        if len(pred) > 1:
+            pred = np.concatenate(pred, axis=1)
+        else:
+            pred = pred[0]
+        return pred
+
+    def predict(self, fcst_dataset, rolling = None, batch_size = None):
         perc_horizon = self.input_settings['perc_horizon']
         fcst_horizon = self.input_settings['fcst_horizon']
         whole_fcst_horizon = self.input_settings['whole_fcst_horizon']
@@ -173,16 +200,19 @@ class ModelPipeline(metaclass = abc.ABCMeta):
 
                 self.fcst_model = TSModel(inputs = [i for i in inputs.values() if i is not None], outputs = output)
                 self.copy_weights_in_fcsting()
-        
-        pred = []
-        for tmp_dataset in fcst_dataset:
-            tmp_pred = self.fcst_model.predict(tmp_dataset.batch(batch_size))
-            tmp_pred = tmp_pred.reshape((tmp_pred.shape[0], tmp_pred.shape[2], tmp_pred.shape[3]))
-            pred.append(tmp_pred)
-        if len(pred) > 1:
-            pred = np.concatenate(pred, axis=1)
+
+        if rolling is True:
+            pred = self.predict_rolling(fcst_dataset, perc_horizon, fcst_horizon, batch_size)
         else:
-            pred = pred[0]
+            pred = []
+            for tmp_dataset in fcst_dataset:
+                tmp_pred = self.fcst_model.predict(tmp_dataset.batch(batch_size))
+                tmp_pred = tmp_pred.reshape((tmp_pred.shape[0], tmp_pred.shape[2], tmp_pred.shape[3]))
+                pred.append(tmp_pred)
+            if len(pred) > 1:
+                pred = np.concatenate(pred, axis=1)
+            else:
+                pred = pred[0]
         
         return pred[:, :whole_fcst_horizon]
     
