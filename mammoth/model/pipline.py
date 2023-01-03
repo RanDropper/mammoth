@@ -155,6 +155,7 @@ class ModelPipeline(metaclass = abc.ABCMeta):
                            use_multiprocessing = use_multiprocessing,
                            verbose = verbose)
 
+
     def predict_rolling(self, fcst_dataset, perc_horizon, fcst_horizon, batch_size=None):
         pred = []
         for i, tmp_dataset in enumerate(fcst_dataset):
@@ -182,6 +183,7 @@ class ModelPipeline(metaclass = abc.ABCMeta):
         else:
             pred = pred[0]
         return pred
+
 
     def predict(self, fcst_dataset, rolling = None, batch_size = None):
         perc_horizon = self.input_settings['perc_horizon']

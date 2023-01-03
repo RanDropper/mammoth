@@ -3,6 +3,7 @@
   <component name="ChangeListManager">
     <list default="true" id="e5aba464-7bc3-48b2-b591-b4aa45c60211" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mammoth/data_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/mammoth/data_loader.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/mammoth/model/pipline.py" beforeDir="false" afterPath="$PROJECT_DIR$/mammoth/model/pipline.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

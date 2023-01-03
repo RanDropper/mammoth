@@ -379,7 +379,7 @@ class DatasetBuilder(DataProcessing):
         fcst_horizon = self.input_settings['fcst_horizon']
         window_freq = self.input_settings['window_freq']
         
-        dynamic_feat = np.unique(seq_target + enc_feat + dec_feat).tolist()
+        dynamic_feat = seq_target + np.unique(enc_feat + dec_feat).tolist()
         self.input_settings['dynamic_feat'] = dynamic_feat
         
         seq_dataset = tf.data.Dataset.from_tensor_slices(
@@ -424,7 +424,7 @@ class DatasetBuilder(DataProcessing):
         perc_horizon = self.input_settings['perc_horizon']
         whole_fcst_horizon = self.input_settings['whole_fcst_horizon']
         
-        dynamic_feat = np.unique(seq_target + enc_feat + dec_feat).tolist()
+        dynamic_feat = seq_target + np.unique(enc_feat + dec_feat).tolist()
         data_numpy = data[dynamic_feat].values.reshape((n_samples, seq_len, len(dynamic_feat)))
         masking_numpy = data['padding'].values.reshape((n_samples, seq_len, 1))
         
