@@ -68,7 +68,7 @@ class AttentionStack(ModelBlock):
     
     def build(self, tensor):
         rel_dim = self.hp.get('rel_dim', 4)
-        k_clusters = len(self.hp.get('base_models'))
+        k_clusters = self.hp.get('n_stack')
         horizon = self.hp.get('horizon')
         stack_dropout = self.hp.get('stack_dropout', 0)
         

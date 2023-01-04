@@ -88,19 +88,21 @@ def single_tsm(input_settings, train_settings,
         The untrained model with object type 'ModelBase'
     """
     hyper_params = {}
+    flow_blocks = {}
+
     if norm_feat is not None:
         hyper_params.update({'norm_feat':norm_feat})
     if perc_horizon is not None:
         hyper_params.update({'perc_horizon':perc_horizon})
 
-    for part in [embedding, encoder, decoder, recoder, output]:
-        hyper_params.update( list(part.values())[0] )
-    
-    flow_blocks = {'Embedding':list(embedding.keys())[0],
-                   'Encoder':list(encoder.keys())[0], 
-                   'Decoder':list(decoder.keys())[0],
-                   'Recoder':list(recoder.keys())[0],
-                   'Output':list(output.keys())[0]}
+    for part_name, part in zip(['Embedding', 'Encoder', 'Decoder', 'Recoder', 'Output'],
+                               [embedding, encoder, decoder, recoder, output]):
+        if part is not None:
+            hyper_params.update( list(part.values())[0] )
+            flow_blocks[part_name] = list(part.keys())[0]
+        else:
+            flow_blocks[part_name] = None
+
     hyper_params['flow_blocks'] = flow_blocks
     
     tsm = ModelBase(input_settings, hyper_params, train_settings)

@@ -75,11 +75,17 @@ class ModelBase(ModelPipeline):
         enc_scaled, \
         y_mean, \
         y_std = revin(enc_input, his_masking)
-        
-        enc_output = self._Encoder(enc_scaled*his_masking)
-        enc_output = enc_output[:, -fut_masking.shape[1]:, :]
-        
-        enc_decoder = self._Decoder(enc_output)
+
+        if self._Encoder is not None:
+            enc_output = self._Encoder(enc_scaled*his_masking)
+            enc_output = enc_output[:, -fut_masking.shape[1]:, :]
+        else:
+            enc_output = enc_scaled[:, -fut_masking.shape[1]:, :]
+
+        if self._Decoder is not None:
+            enc_decoder = self._Decoder(enc_output)
+        else:
+            enc_decoder = enc_output
         
         outlayer_input = [enc_decoder]
             
