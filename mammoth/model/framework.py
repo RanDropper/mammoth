@@ -77,13 +77,13 @@ class ModelBase(ModelPipeline):
         y_std = revin(enc_input, his_masking)
 
         if self._Encoder is not None:
-            enc_output = self._Encoder(enc_scaled*his_masking, is_fcst)
+            enc_output = self._Encoder(enc_scaled*his_masking, is_fcst = is_fcst)
             enc_output = enc_output[:, -fut_masking.shape[1]:, :]
         else:
             enc_output = enc_scaled[:, -fut_masking.shape[1]:, :]
 
         if self._Decoder is not None:
-            enc_decoder = self._Decoder(enc_output, is_fcst)
+            enc_decoder = self._Decoder(enc_output, is_fcst = is_fcst)
         else:
             enc_decoder = enc_output
         
@@ -93,7 +93,7 @@ class ModelBase(ModelPipeline):
             if self._Recoder is None:
                 outlayer_input.append(dec_input*fut_masking)
             else:
-                outlayer_input.append(self._Recoder(dec_input*fut_masking, is_fcst))
+                outlayer_input.append(self._Recoder(dec_input*fut_masking, is_fcst = is_fcst))
         
         if embed_input is not None:
             _, T, F, E = fut_masking.shape
@@ -105,7 +105,7 @@ class ModelBase(ModelPipeline):
         else:
             outlayer_input = outlayer_input[0]
         
-        scaled_output = self._Output(outlayer_input*fut_masking, is_fcst)
+        scaled_output = self._Output(outlayer_input*fut_masking, is_fcst = is_fcst)
 
         output = revin.denormalize(scaled_output, y_mean, y_std)
         
@@ -117,7 +117,7 @@ class ModelBase(ModelPipeline):
         
         if embed_input is not None:
             if self._Embedding is not None:
-                embed_tensor = self._Embedding(embed_input)
+                embed_tensor = self._Embedding(embed_input, is_fcst = is_fcst)
             else:
                 embed_tensor = embed_input
         else:
@@ -247,7 +247,7 @@ class ModelStack(ModelBase):
         if embed_input is not None:
             _Embedding = self.model_lists[0]._Embedding
             if _Embedding is not None:
-                embed_tensor = _Embedding(embed_input)
+                embed_tensor = _Embedding(embed_input, is_fcst = is_fcst)
             else:
                 embed_tensor = embed_input
         else:
@@ -259,7 +259,7 @@ class ModelStack(ModelBase):
         hp = self.hyper_params[stack_name]
         hp.update({'n_stack':self.n_stack})
         stack = self._init_model_block(stack_name, hp)
-        stack_prob = stack(seq_scaled_input*masking)
+        stack_prob = stack(seq_scaled_input*masking, is_fcst = is_fcst)
         
         output = []
         for i, tsm in enumerate(self.model_lists):
