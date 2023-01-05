@@ -77,13 +77,13 @@ class ModelBase(ModelPipeline):
         y_std = revin(enc_input, his_masking)
 
         if self._Encoder is not None:
-            enc_output = self._Encoder(enc_scaled*his_masking)
+            enc_output = self._Encoder(enc_scaled*his_masking, is_fcst)
             enc_output = enc_output[:, -fut_masking.shape[1]:, :]
         else:
             enc_output = enc_scaled[:, -fut_masking.shape[1]:, :]
 
         if self._Decoder is not None:
-            enc_decoder = self._Decoder(enc_output)
+            enc_decoder = self._Decoder(enc_output, is_fcst)
         else:
             enc_decoder = enc_output
         
@@ -93,7 +93,7 @@ class ModelBase(ModelPipeline):
             if self._Recoder is None:
                 outlayer_input.append(dec_input*fut_masking)
             else:
-                outlayer_input.append(self._Recoder(dec_input*fut_masking))
+                outlayer_input.append(self._Recoder(dec_input*fut_masking, is_fcst))
         
         if embed_input is not None:
             _, T, F, E = fut_masking.shape
@@ -105,7 +105,7 @@ class ModelBase(ModelPipeline):
         else:
             outlayer_input = outlayer_input[0]
         
-        scaled_output = self._Output(outlayer_input*fut_masking)
+        scaled_output = self._Output(outlayer_input*fut_masking, is_fcst)
 
         output = revin.denormalize(scaled_output, y_mean, y_std)
         

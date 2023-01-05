@@ -20,7 +20,7 @@ class ModelBlock(metaclass = abc.ABCMeta):
     def __init__(self):
         self.added_loss = None
     
-    def __call__(self, tensor):
+    def __call__(self, tensor, **kwargs):
         if len(tensor.shape) == 2:
             tensor_shape = (None, tensor.shape[-1])
         elif len(tensor.shape) == 3:
@@ -31,12 +31,12 @@ class ModelBlock(metaclass = abc.ABCMeta):
             raise ValueError("The rank of {} input tensor should be <= 4, but recieve {}".format(self.name, tensor.shape))
         
         def inner_build(tensor):
-            return self.build(tensor)
+            return self.build(tensor, **kwargs)
         
         return inner_build(tensor)
     
     @abc.abstractmethod
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         return tensor
     
 
@@ -47,7 +47,7 @@ class SimpleEmbedding(ModelBlock):
         self.hp = hp.copy()
         self.name = name
     
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         n_embed_layers = self.hp.get('n_embed_layers', 1)
         embed_out_dim = self.hp.get('embed_out_dim', tensor.shape[-1])
         embed_l1_regular = self.hp.get('embed_l1_regular', 0)
@@ -66,7 +66,7 @@ class AttentionStack(ModelBlock):
         self.hp = hp.copy()
         self.name = name
     
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         rel_dim = self.hp.get('rel_dim', 4)
         k_clusters = self.hp.get('n_stack')
         horizon = self.hp.get('horizon')
@@ -94,7 +94,7 @@ class GCNStack(ModelBlock):
         self.hp = hp.copy()
         self.name = name
     
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         gcn_layers = self.hp.get('gcn_layers', 2)
         rel_dim = self.hp.get('rel_dim', 4)
         n_stack = self.hp.get('n_stack')
@@ -130,7 +130,7 @@ class WavenetEncoder(ModelBlock):
         self.name = name
         
         
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         n_enc_layers = self.hp.get('n_enc_layers', 6)
         n_enc_filters = self.hp.get('n_enc_filters', 16)
         enc_kernel_size = self.hp.get('enc_kernel_size', 2)
@@ -161,7 +161,7 @@ class TransformerEncoder(ModelBlock):
         self.name = name
         
     
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         num_heads = self.hp.get('enc_num_heads', 4)
         k_dim = self.hp.get('enc_k_dim', 4)
         v_dim = self.hp.get('enc_v_dim', 4)
@@ -196,7 +196,7 @@ class InformerEncoder(ModelBlock):
         self.name = name
             
     
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         num_heads = self.hp.get('enc_num_heads', 4)
         k_dim = self.hp.get('enc_k_dim', 4)
         v_dim = self.hp.get('enc_v_dim', 4)
@@ -241,7 +241,7 @@ class SciEncoder(ModelBlock):
         self.name = name
         
 
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         n_splits = self.hp.get('n_splits', 2)
         n_levels = self.hp.get('n_levels', 4)
         n_blocks = self.hp.get('n_blocks', 1)
@@ -276,7 +276,7 @@ class DenseDecoder(ModelBlock):
         self.hp = hp.copy()
         self.name = name
         
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         fcst_len = self.hp.get('fcst_horizon')
         activation = self.hp.get('dec_activation', 'swish')
         
@@ -295,7 +295,7 @@ class CaCtDecoder(ModelBlock):
         self.name = name
         
     
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         fcst_len = self.hp.get('fcst_horizon')
         ca_dim = self.hp.get('ca_dim', 16)
         ca_activation = self.hp.get('ca_activation', 'swish')
@@ -328,7 +328,7 @@ class ConvRecoder(ModelBlock):
         self.name = name
         
     
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         n_rec_layers = self.hp.get('n_rec_layers', 3)
         n_rec_filters = self.hp.get('n_rec_filters', 8)
         rec_kernel_size = self.hp.get('rec_kernel_size', 2)
@@ -358,7 +358,7 @@ class AttentionRecoder(ModelBlock):
         self.hp = hp.copy()
         self.name = name
    
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         pass
     
 
@@ -369,7 +369,7 @@ class MlpOutput(ModelBlock):
         self.hp = hp.copy()
         self.name = name
         
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         mlp_dims = self.hp.get('mlp_dims', [16])
         mlp_activation = self.hp.get('mlp_activation', 'swish')
         mlp_l1_regular = self.hp.get('mlp_l1_regular', 0)
@@ -393,7 +393,7 @@ class AttentionOutput(ModelBlock):
         self.name = name 
     
 
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         num_heads = self.hp.get('dec_num_heads', 8)
         k_dim = self.hp.get('dec_k_dim', 16)
         dec_attn_layers = self.hp.get('dec_attn_layers', 1)
@@ -419,7 +419,7 @@ class TabnetOutput(ModelBlock):
         self.hp = hp.copy()
         self.name = name
         
-    def build(self, tensor):
+    def build(self, tensor, **kwargs):
         tab_feat_dim = self.hp.get('tab_feat_dim', 16)
         decision_out_dim = self.hp.get('decision_out_dim', 16)
         num_decision_steps = self.hp.get('num_decision_steps', 5)
@@ -439,7 +439,7 @@ class TabnetOutput(ModelBlock):
                         num_groups = num_groups,
                         virtual_batch_size = virtual_batch_size,
                         name = '{}_tabnet'.format(self.name))
-        tab_output =  tabnet(tensor)
+        tab_output = tabnet(tensor)
         
         output = Dense(1, use_bias=False, name='{}_output'.format(self.name))(tab_output)
         
