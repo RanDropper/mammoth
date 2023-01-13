@@ -397,7 +397,7 @@ class TabNet(tf.keras.layers.Layer):
                 entropy_loss = 0.
 
         # Adds the loss automatically
-        self.entropy_loss = self.sparsity_coefficient * total_entropy
+        entropy_loss = self.sparsity_coefficient * total_entropy
 
         # Visualization of the aggregated feature importances
         # tf.summary.image(
@@ -406,4 +406,4 @@ class TabNet(tf.keras.layers.Layer):
         #     max_outputs=1)
         self._step_aggregate_feature_selection_mask = aggregated_mask_values
 
-        return output_aggregated
+        return output_aggregated, entropy_loss

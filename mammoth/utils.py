@@ -180,3 +180,7 @@ def scatter_update(tensor, indices, updates, axis=-1):
 
 
     return tf.transpose(tensor, tr)
+
+
+def tf_ignore_warnings():
+    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)

@@ -16,7 +16,6 @@ class RevIN(Layer):
     def __init__(self, **kwargs):
         super(RevIN, self).__init__(**kwargs)
     
-    
     def build(self, input_shape):
         self.affine_weight = self.add_weight(
             name = 'affine_weight',
@@ -32,25 +31,35 @@ class RevIN(Layer):
             trainable = True,
             dtype=self.dtype
         )
-        
-    
+
     def call(self, tensor, masking=None):
-        y_mean = compute_normal_mean(tensor[:,:,:,0:1], masking, axis=2, keepdims=True)
-        y_std = compute_normal_std(tensor[:,:,:,0:1], masking, axis=2, keepdims=True)
+        y_mean = compute_normal_mean(tf.gather(tensor, [0], axis=-1), masking, axis=-2, keepdims=True)
+        y_std = compute_normal_std(tf.gather(tensor, [0], axis=-1), masking, axis=-2, keepdims=True)
         
-        y_scaled = tf.math.divide_no_nan(tensor[:,:,:,0:1]-y_mean, y_std)
+        y_scaled = tf.math.divide_no_nan(tf.gather(tensor, [0], axis=-1)-y_mean, y_std)
         y_scaled = self.affine_weight * y_scaled + self.affine_bias
-        scaled_tensor = Concatenate()([y_scaled, tensor[:,:,:,1:]])
+        scaled_tensor = Concatenate()([y_scaled, tf.gather(tensor, np.arange(1, tensor.shape[-1]), axis=-1)])
 
         return scaled_tensor, y_mean, y_std
-    
-    
+
     def denormalize(self, tensor, y_mean, y_std):
+        return Denormalize()(tensor, y_mean, y_std, self.affine_bias, self.affine_weight)
+
+
+class Denormalize(Layer):
+    def __init__(self, **kwargs):
+        super(Denormalize, self).__init__(**kwargs)
+
+    def call(self, tensor, y_mean, y_std, affine_bias, affine_weight):
         remainder = tensor.shape[1]
-        y_mean = y_mean[:, -remainder:, :, :]
+        y_mean = y_mean[:, -remainder:, :]
         y_std = y_std[:, -remainder:, :]
 
-        return tf.math.divide_no_nan(tensor-self.affine_bias, self.affine_weight) * y_std + y_mean
+        if len(y_mean.shape) == len(tensor.shape)-1:
+            y_mean = tf.expand_dims(y_mean, axis=2)
+            y_std = tf.expand_dims(y_std, axis=2)
+
+        return tf.math.divide_no_nan(tensor - affine_bias, affine_weight) * y_std + y_mean
     
 
 class InstanceNormalization(Layer):

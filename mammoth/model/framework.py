@@ -1,10 +1,10 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Concatenate, ZeroPadding1D, Lambda, Reshape
+from tensorflow.keras.layers import Concatenate, ZeroPadding1D, Lambda, Reshape, Multiply
 from tensorflow.keras.optimizers import *
 import tensorflow.keras.backend as k
 from tensorflow.keras.callbacks import EarlyStopping
-from mammoth.networks.normalization import RevIN, InstanceNormalization
-from mammoth.utils import scatter_update, compute_normal_mean, compute_normal_std, compute_normal_max, compute_normal_min
+from mammoth.networks.normalization import RevIN
+from mammoth.utils import compute_normal_mean, compute_normal_std
 from mammoth.losses import PearsonCoef
 from mammoth.model.pipline import ModelPipeline
 from mammoth.model.nn_blocks import *
@@ -52,7 +52,26 @@ class ModelBase(ModelPipeline):
               
     def _build_model_blocks(self, hp):
         flow_blocks = hp.get('flow_blocks')
-        
+        norm_feat = hp.get('norm_feat')
+        is_fork = hp.get('is_fork', False)
+
+        if norm_feat is not None:
+            self._InstanceNorms = []
+            for method in norm_feat.keys():
+                norm_col_idx = hp['{}_norm_idx'.format(method)]
+                self._InstanceNorms.append(
+                    self._init_model_block('InstanceNorm', hp,
+                                           name_suffix = method,
+                                           method = method,
+                                           norm_col_idx = norm_col_idx)
+                )
+        else:
+            self._InstanceNorms = None
+
+        if is_fork:
+            self._InitTransform = self._init_model_block('ForkTransform', hp)
+        else:
+            self._InitTransform = self._init_model_block('MovingWindowTransform', hp)
         self._Encoder = self._init_model_block(flow_blocks.get('Encoder'), hp)
         self._Decoder = self._init_model_block(flow_blocks.get('Decoder'), hp)
         self._Recoder = self._init_model_block(flow_blocks.get('Recoder'), hp)
@@ -60,27 +79,41 @@ class ModelBase(ModelPipeline):
     
 
     def single_tsmodel(self, hp, seq_input, embed_input, masking, remainder, is_fcst):
-        fcst_len = hp.get('fcst_horizon')
         perc_horizon = hp.get('perc_horizon')
         
         if perc_horizon > self.input_settings.get('perc_horizon'):
             print("warnings: The tsmodel '{}' has perception horizon {}, which is larger than that defined in data processing.".format(self.name, perc_horizon))
-            
-        enc_input,\
-        dec_input,\
-        his_masking,\
-        fut_masking = self.seq_input_transform(seq_input, masking, perc_horizon, remainder, is_fcst, hp)
+
+        enc_input, \
+        dec_input, \
+        his_masking, \
+        fut_masking = self._InitTransform(seq_input, masking=masking,
+                                          dynamic_feat = self.input_settings['dynamic_feat'],
+                                          seq_target = self.input_settings['seq_target'],
+                                          enc_feat = self.input_settings['enc_feat'],
+                                          dec_feat = self.input_settings['dec_feat'],
+                                          is_fcst = is_fcst,
+                                          remainder = remainder)
+
+        if self._InstanceNorms is not None:
+            for IN in self._InstanceNorms:
+                seq_input = IN(seq_input, masking = masking)
         
         revin = RevIN(name='RevIN_{}'.format(self.built_times))
-        enc_scaled, \
-        y_mean, \
-        y_std = revin(enc_input, his_masking)
+        enc_scaled, y_mean, y_std = revin(enc_input, his_masking)
 
+        Sliced = Lambda(lambda x:x[:, -fut_masking.shape[1]:, :], name='slice_encoder_output_{}'.format(self.built_times))
+        enc_scaled = Multiply(
+            name='encoder_input_multiply_masking_{}'.format(self.built_times)
+        )([enc_scaled, his_masking])
         if self._Encoder is not None:
-            enc_output = self._Encoder(enc_scaled*his_masking, is_fcst = is_fcst)
-            enc_output = enc_output[:, -fut_masking.shape[1]:, :]
+            enc_output = self._Encoder(enc_scaled, is_fcst = is_fcst)
+            enc_output = Sliced(enc_output)
         else:
-            enc_output = enc_scaled[:, -fut_masking.shape[1]:, :]
+            enc_output = Sliced(enc_scaled)
+
+        if len(enc_output.shape) == 3:
+            enc_output = tf.expand_dims(enc_output, axis=2)
 
         if self._Decoder is not None:
             enc_decoder = self._Decoder(enc_output, is_fcst = is_fcst)
@@ -90,27 +123,39 @@ class ModelBase(ModelPipeline):
         outlayer_input = [enc_decoder]
             
         if dec_input is not None:
+            dec_input = Multiply(
+                name='decoder_input_multiply_masking_{}'.format(self.built_times)
+            )([dec_input, fut_masking])
             if self._Recoder is None:
-                outlayer_input.append(dec_input*fut_masking)
+                outlayer_input.append(dec_input)
             else:
-                outlayer_input.append(self._Recoder(dec_input*fut_masking, is_fcst = is_fcst))
+                outlayer_input.append(self._Recoder(dec_input, is_fcst = is_fcst))
         
         if embed_input is not None:
             _, T, F, E = fut_masking.shape
-            embed_input = tf.tile( Reshape((1,1,embed_input.shape[-1]))(embed_input), [1, T, F, 1] )
+            embed_input = tf.tile(Reshape(
+                (1,1,embed_input.shape[-1]), name='expand_embed_input_dims_{}'.format(self.built_times)
+            )(embed_input), [1, T, F, 1], name = 'repeat_embed_feat_{}'.format(self.built_times))
             outlayer_input.append(embed_input)
                 
         if len(outlayer_input) > 1:
-            outlayer_input = Concatenate()(outlayer_input)
+            outlayer_input = Concatenate(
+                name='concat_all_decoder_feats_{}'.format(self.built_times)
+            )(outlayer_input)
         else:
             outlayer_input = outlayer_input[0]
-        
-        scaled_output = self._Output(outlayer_input*fut_masking, is_fcst = is_fcst)
+
+        outlayer_input = Multiply(
+            name='outlayer_input_multiply_masking_{}'.format(self.built_times)
+        )([outlayer_input, fut_masking])
+        scaled_output = self._Output(outlayer_input, is_fcst = is_fcst)
 
         output = revin.denormalize(scaled_output, y_mean, y_std)
         
         return output
- 
+
+
+    @tf.autograph.experimental.do_not_convert
     def NN(self, seq_input, embed_input, masking, remainder = None, is_fcst = False):
         self._Embedding = self._init_model_block(self.hyper_params['flow_blocks'].get('Embedding'), self.hyper_params)
         self._build_model_blocks(self.hyper_params)
@@ -129,68 +174,6 @@ class ModelBase(ModelPipeline):
         return output
     
     
-    def seq_input_transform(self, tensor, masking, perc_horizon, remainder, is_fcst, hp):
-        seq_target = self.input_settings['seq_target']
-        dynamic_feat = self.input_settings['dynamic_feat']
-        enc_feat = self.input_settings['enc_feat']
-        dec_feat = self.input_settings['dec_feat']
-        fcst_horizon = self.input_settings['fcst_horizon']
-        window_freq = self.input_settings['window_freq']
-        norm_feat = hp.get('norm_feat')
-        
-        enc_idx = [dynamic_feat.index(i) for i in seq_target + enc_feat]
-        dec_idx = [dynamic_feat.index(i) for i in dec_feat]
-        
-        if is_fcst:
-            padding_len = perc_horizon+fcst_horizon-tensor.shape[1]
-            if padding_len > 0:
-                tensor = ZeroPadding1D((padding_len, 0))(tensor)
-                masking = ZeroPadding1D((padding_len, 0))(masking)
-            tensor = tensor[:, -(perc_horizon+fcst_horizon):, :]
-            masking = masking[:, -(perc_horizon+fcst_horizon):, :]
-            tensor = tf.expand_dims(tensor, axis=1)
-            masking = tf.expand_dims(masking, axis=1)
-        else:
-            tensor = ZeroPadding1D((perc_horizon-1, fcst_horizon-1))(tensor)
-            tensor = tf.signal.frame(tensor, perc_horizon+fcst_horizon, window_freq, axis=1)
-
-            masking = ZeroPadding1D((perc_horizon-1, fcst_horizon-1))(masking)
-            masking = tf.signal.frame(masking, perc_horizon+fcst_horizon, window_freq, axis=1)
-        
-        ## Instance Normalization
-        if norm_feat is not None:
-            if not isinstance(norm_feat, dict):
-                raise TypeError("""The dtype of hyper parameter 'norm_feat' should be 'dict', 
-                and in the format as follows: {method: [col_1, col_2, ..., col_n]}.
-                """)
-
-            for method, cols in norm_feat.items():
-                norm_col_idx = [dynamic_feat.index(i) for i in cols]
-                tensor_norm_update = InstanceNormalization(axis = 2,
-                                                           method = method, 
-                                                           name = '{}_norm_on_feature{}'.format(method, self.built_times)
-                                                          )(tf.gather(tensor, norm_col_idx, axis=-1),
-                                                            masking = masking)
-                tensor = scatter_update(tensor, norm_col_idx, tensor_norm_update, axis=-1)
-        
-        enc_tensor = tf.gather(tensor[:, :, :perc_horizon, :], enc_idx, axis=-1)
-        his_masking = masking[:, :, :perc_horizon, :]
-        if remainder is None:
-            fut_masking = masking[:, :, -fcst_horizon:, :]
-        else:
-            fut_masking = masking[:, -remainder:, -fcst_horizon:, :]
-        
-        if len(dec_idx) > 0:
-            if remainder is None:
-                dec_tensor = tf.gather(tensor[:, :, -fcst_horizon:, :], dec_idx, axis=-1)
-            else:
-                dec_tensor = tf.gather(tensor[:, -remainder:, -fcst_horizon:, :], dec_idx, axis=-1)
-        else:
-            dec_tensor = None
-        
-        return enc_tensor, dec_tensor, his_masking, fut_masking
-    
-    
     def _update_hp(self):
         if self.hyper_params.get('perc_horizon') is None:
             self.hyper_params['perc_horizon'] = self.input_settings['perc_horizon']
@@ -198,6 +181,18 @@ class ModelBase(ModelPipeline):
         self.hyper_params['enc_feat_dim'] = len(self.input_settings.get('enc_feat'))
         self.hyper_params['dec_feat_dim'] = len(self.input_settings.get('dec_feat'))
         self.hyper_params['embed_feat_dim'] = len(self.input_settings.get('embed_feat'))
+        self.hyper_params['window_freq'] = self.input_settings['window_freq']
+
+        norm_feat = self.hyper_params.get('norm_feat')
+        dynamic_feat = self.input_settings['dynamic_feat']
+        if norm_feat is not None:
+            if not isinstance(norm_feat, dict):
+                raise TypeError("""The dtype of hyper parameter 'norm_feat' should be 'dict', 
+                 and in the format as follows: {method: [col_1, col_2, ..., col_n]}.
+                 """)
+            for method, cols in norm_feat.items():
+                norm_col_idx = [dynamic_feat.index(i) for i in cols]
+                self.hyper_params['{}_norm_idx'.format(method)] = norm_col_idx
         
         
     def _update_model_name(self):
@@ -209,7 +204,7 @@ class ModelBase(ModelPipeline):
                 self.name = encoder.name.replace('Encoder', '')
     
     
-    def _init_model_block(self, mb, hp):
+    def _init_model_block(self, mb, hp, name_suffix=None, **kwargs):
         if mb is None:
             return None
         
@@ -217,8 +212,12 @@ class ModelBase(ModelPipeline):
             tmp_block = eval(mb)
         else:
             tmp_block = mb
-            
-        tmp_block = tmp_block(hp, name='{}{}'.format(tmp_block.__name__, self.built_times))
+
+        if name_suffix is not None:
+            name = '{}_{}_{}'.format(tmp_block.__name__, name_suffix, self.built_times)
+        else:
+            name = '{}{}'.format(tmp_block.__name__, self.built_times)
+        tmp_block = tmp_block(hp, name=name, **kwargs)
             
         if tmp_block.added_loss is not None:
             self.added_loss += tmp_block.added_loss
@@ -239,8 +238,8 @@ class ModelStack(ModelBase):
         
         self.is_pretrain = is_pretrain
         self.pretrain_epoch = pretrain_epoch
-        
-    
+
+    @tf.autograph.experimental.do_not_convert
     def NN(self, seq_input, embed_input, masking, remainder = None, is_fcst = False):
         self.built_times = 0
         
@@ -272,9 +271,9 @@ class ModelStack(ModelBase):
             output.append( single_output )
             
         stack_prob = Lambda(lambda x:x[0]*x[1], 
-                            name = 'stack_prob')([Concatenate()(output), 
+                            name = 'stack_prob')([Concatenate(name='concat_all_model_outputs')(output),
                                                   Reshape((1,1,self.n_stack))(stack_prob)])
-        output = k.sum( stack_prob, axis=-1, keepdims=True )
+        output = k.sum( stack_prob, axis=-1, keepdims=True, name='stack_weighted_average' )
             
         output = Lambda(lambda x:x, name='output')(output)
         

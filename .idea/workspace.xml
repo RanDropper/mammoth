@@ -2,11 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="e5aba464-7bc3-48b2-b591-b4aa45c60211" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/mammoth/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/mammoth/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mammoth/data_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/mammoth/data_loader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mammoth/model/framework.py" beforeDir="false" afterPath="$PROJECT_DIR$/mammoth/model/framework.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mammoth/model/nn_blocks.py" beforeDir="false" afterPath="$PROJECT_DIR$/mammoth/model/nn_blocks.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mammoth/model/pipline.py" beforeDir="false" afterPath="$PROJECT_DIR$/mammoth/model/pipline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -21,7 +17,7 @@
     </option>
   </component>
   <component name="Git.Settings">
-    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/mammoth" />
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />

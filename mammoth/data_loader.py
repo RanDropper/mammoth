@@ -201,7 +201,7 @@ class DatasetBuilder(DataProcessing):
             * perc_horizon: <integer> The size of looking back window, which means how long of historical data you will refer to.
             * fcst_horizon: <integer> The prediction length.
         
-        Not required keys for 'input_settings' are as follows:
+         Alternative keys for 'input_settings' are as follows:
             * enc_feat: <List> The features used in the encoding part. default: [].
             * dec_feat: <List> The features used in the decoding part. default: [].
             * embed_feat: <List> The embedding features. default: [].
@@ -218,7 +218,7 @@ class DatasetBuilder(DataProcessing):
     Callable Arguments:
         train_data: <pandas.DataFrame> The dataframe used for training.
         fcst_data: <pandas.DataFrame> The dataframe used for forecasting.
-        embed_data: <embed_data> The dataframe used for embedding.
+        embed_data: <pandas.DataFrame> The dataframe used for embedding.
 
     Return:
         train_dataset: <tensorflow.data.Dataset> Dataset for training.

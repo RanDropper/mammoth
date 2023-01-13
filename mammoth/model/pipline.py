@@ -60,7 +60,7 @@ class ModelPipeline(metaclass = abc.ABCMeta):
                 model = TSModel(inputs = [i for i in inputs.values() if i is not None], outputs = output)
                 model.compile(loss = loss_func, 
                               loss_weights = loss_weights,
-                              optimizer = optimizer(lr=learning_rate), 
+                              optimizer = optimizer(learning_rate=learning_rate),
                               weighted_metrics = weighted_metrics,
                               sample_weight_mode = "temporal",
                               run_eagerly = True)
@@ -79,7 +79,7 @@ class ModelPipeline(metaclass = abc.ABCMeta):
                                 evaluates = ([i for i in eval_inputs.values() if i is not None], eval_output))
                 model.compile(loss = loss_func, 
                               loss_weights = loss_weights,
-                              optimizer = optimizer(lr=learning_rate), 
+                              optimizer = optimizer(learning_rate=learning_rate),
                               weighted_metrics = weighted_metrics,
                               sample_weight_mode = "temporal",
                               run_eagerly = True)
@@ -93,7 +93,6 @@ class ModelPipeline(metaclass = abc.ABCMeta):
     def model_input(self, seq_len):
         fdim = len(self.input_settings.get('dynamic_feat'))
         edim = len(self.input_settings.get('embed_feat'))
-        batch_size = self.train_settings.get('batch_size')
         
         if self.input_settings.get('n_train_samples') == 1:
             bs = 1
@@ -109,8 +108,9 @@ class ModelPipeline(metaclass = abc.ABCMeta):
             inputs['embed_input'] = Input((edim, ), batch_size = bs, dtype=tf.float32)
         
         return inputs
-    
-    
+
+
+    @tf.autograph.experimental.do_not_convert
     def fit(self, train_dataset, validation_dataset=None):
         batch_size = self.train_settings.get('batch_size')
         epochs = self.train_settings.get('epochs')
@@ -184,7 +184,7 @@ class ModelPipeline(metaclass = abc.ABCMeta):
             pred = pred[0]
         return pred
 
-
+    @tf.autograph.experimental.do_not_convert
     def predict(self, fcst_dataset, rolling = None, batch_size = None):
         perc_horizon = self.input_settings['perc_horizon']
         fcst_horizon = self.input_settings['fcst_horizon']
@@ -264,6 +264,20 @@ class ModelPipeline(metaclass = abc.ABCMeta):
                     if 'ts_model' not in layer.name:
                         print('warnings: The weight of Layer {} is not copied successfully.'.format(layer.name))
         return m1
+
+
+    def summary(self):
+        if self.model is not None:
+            return self.model.summary()
+        else:
+            raise NotImplementedError("The training model is not be built !")
+
+
+    def summary2(self):
+        if self.fcst_model is not None:
+            return self.fcst_model.summary()
+        else:
+            raise NotImplementedError("The fcsting model is not be built !")
     
     
     

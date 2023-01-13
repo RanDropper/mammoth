@@ -1,12 +1,14 @@
 from mammoth.model.framework import ModelBase, ModelStack
 from mammoth.data_loader import DatasetBuilder as dsbuilder
-    
+from mammoth.utils import tf_ignore_warnings
+
 def single_tsm(input_settings, train_settings, 
                embedding = {'SimpleEmbedding':{}}, 
                encoder = {'WavenetEncoder':{}}, 
                decoder = {'DenseDecoder':{}}, 
                recoder = {'ConvRecoder':{}}, 
                output = {'MlpOutput':{}},
+               is_fork = False,
                norm_feat = None,
                perc_horizon = None):
     """ The single time series model, without stack.
@@ -71,7 +73,10 @@ def single_tsm(input_settings, train_settings,
             * MlpOutput: The most common output methods. Just use several fully connected layers to get the final output.
             * AttentionOutput: The attention mechanism applied on the feature dimension. Usually used in attention-related models, e.g. Informer.
             * TabnetOutput: Using TabNet for the final regression or classification. For TabNet, please refer to https://arxiv.org/pdf/1908.07442v5.pdf.
-        
+
+        is_fork: Whether use fork training. Fork training is only available to RNN-based and RNN-based models, e.g. 'WaveNet' and 'SCINet'.
+                    Fork training can save memory and speed up training process.
+
         norm_feat: A dictionary whose key is the normalization methods, and value is a iterable object that contains features you want to normalize. 
                     e.g. {'standard':['f1', 'f2']}. There are 4 normalization methods:
             * standard: $\frac{x-avg(x)}{std(x)}$
@@ -87,7 +92,7 @@ def single_tsm(input_settings, train_settings,
     Return:
         The untrained model with object type 'ModelBase'
     """
-    hyper_params = {}
+    hyper_params = {'is_fork':is_fork}
     flow_blocks = {}
 
     if norm_feat is not None:
