@@ -56,7 +56,7 @@ plt.show()
 ```
 
 
-![png](output_3_0.png)
+![png](pic/output_3_0.png)
 
 
 # Build dataset for training and forecasting
@@ -69,21 +69,21 @@ plt.show()
 
 Required keys for 'input_settings' are as follows:
 
-* `seq_key` $<List/string/integer>$ The primary key of time series.
-* `seq_label` $<List/string/integer>$ The columns to identity the time sequence, such as calendar date or cumulative number.
-* `seq_target` $<List/string/integer>$ The target to predict.
-* `perc_horizon` $<integer>$ The size of looking back window, which means how long of historical data you will refer to.
-* `fcst_horizon` $<integer>$ The prediction length.
+* `seq_key` *-List or string or integer-* The primary key of time series.
+* `seq_label` *-List or string or integer-* The columns to identity the time sequence, such as calendar date or cumulative number.
+* `seq_target` *-List or string or integer-* The target to predict.
+* `perc_horizon` *-integer-* The size of looking back window, which means how long of historical data you will refer to.
+* `fcst_horizon` *-integer-* The prediction length.
         
 Alternative keys for 'input_settings' are as follows:
-* `enc_feat` $<List>$ The name of features used in the encoding part. default: [].
-* `dec_feat` $<List>$ The name of features used in the decoding part. default: [].
-* `embed_feat` $<List>$ The name of embedding features. default: [].
-* `norm_feat` $<dictionary>$ The features you want to normalize. It is recommended to define 'norm_feat' within 'single_tsm' function. When you define 'norm_feat' here, there won't be trainable weights on mean and standard deviation. default: {}.
-* `min_avail_perc_rate` $<float>$ The minimum rate of padding time points verus perception horizon. When exceeded, the data at that time point will be padded. default: 0.25.
-* `min_avail_seq_rate` $<float>$ The minimum rate of padding time points verus each time series. Exceeded time series won't be trained. default: 0.5.
-* `window_freq` $<integer>$ The strides of sliding window to get time series pieces. default: 1.
-* `val_rate` $<float>$ The rate of validation part in train data. If None, no validation data will be built. default: None
+* `enc_feat` *-List-* The name of features used in the encoding part. default: [].
+* `dec_feat` *-List-* The name of features used in the decoding part. default: [].
+* `embed_feat` *-List-* The name of embedding features. default: [].
+* `norm_feat` *-dictionary-* The features you want to normalize. It is recommended to define 'norm_feat' within 'single_tsm' function. When you define 'norm_feat' here, there won't be trainable weights on mean and standard deviation. default: {}.
+* `min_avail_perc_rate` *-float-* The minimum rate of padding time points verus perception horizon. When exceeded, the data at that time point will be padded. default: 0.25.
+* `min_avail_seq_rate` *-float-* The minimum rate of padding time points verus each time series. Exceeded time series won't be trained. default: 0.5.
+* `window_freq` *-integer-* The strides of sliding window to get time series pieces. default: 1.
+* `val_rate` *-float-* The rate of validation part in train data. If None, no validation data will be built. default: None
 
 ***
 <font size=3>***train_settings*** is a dictionary contains the basic settings for training.</font>
@@ -107,17 +107,17 @@ Alternative settings are as follows:
 
 ***
 Callable Arguments:
-* `train_data` $<pandas.DataFrame>$ The dataframe used for training.
-* `fcst_data` $<pandas.DataFrame>$ The dataframe used for forecasting.
-* `embed_data` $<pandas.DataFrame>$ The dataframe used for embedding.
+* `train_data` *-pandas.DataFrame-* The dataframe used for training.
+* `fcst_data` *-pandas.DataFrame-* The dataframe used for forecasting.
+* `embed_data` *-pandas.DataFrame-* The dataframe used for embedding.
 
 ***
 Return:
-* `train_dataset` $<tensorflow.data.Dataset>$ Dataset for training.
-* `val_dataset` $<tensorflow.data.Dataset>$ Dataset for validation.
-* `fcst_dataset` $<tensorflow.data.Dataset>$ Dataset for forecasting.
-* `input_settings` $<dictionary>$ Updated input_settings.
-* `prediction` $<pandas.DataFrame>$ The primary key frame of forecast, including seq_key and seq_label.
+* `train_dataset` *-tensorflow.data.Dataset-* Dataset for training.
+* `val_dataset` *-tensorflow.data.Dataset-* Dataset for validation.
+* `fcst_dataset` *-tensorflow.data.Dataset-* Dataset for forecasting.
+* `input_settings` *-dictionary-* Updated input_settings.
+* `prediction` *-pandas.DataFrame-* The primary key frame of forecast, including seq_key and seq_label.
 
 
 ```python
@@ -691,18 +691,12 @@ for key in data['series_key'].unique():
 ```
 
 
-![png](output_12_0.png)
+![png](pic/output_12_0.png)
 
 
 
-![png](output_12_1.png)
+![png](pic/output_12_1.png)
 
 
 
-![png](output_12_2.png)
-
-
-
-```python
-
-```
+![png](pic/output_12_2.png)
