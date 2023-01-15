@@ -147,16 +147,16 @@ class InstanceNorm(ModelBlock):
     def __init__(self, hp, name='InstanceNorm', **kwargs):
         super(InstanceNorm, self).__init__(name=name, **kwargs)
         self.hp = hp.copy()
-        self.method = kwargs.get('method')
+        self.norm_method = kwargs.get('norm_method')
         self.norm_col_idx = kwargs.get('norm_col_idx')
         self.axis = kwargs.get('axis', -2)
         self.affine = kwargs.get('affine', True)
         self._built_from_signature()
 
     def _built_from_signature(self):
-        self.IN = InstanceNormalization(axis=self.axis, method=self.method,
+        self.IN = InstanceNormalization(axis=self.axis, method=self.norm_method,
                                         affine=self.affine,
-                                        name='{}_norm_on_feature{}'.format(self.method, self.built_times))
+                                        name='{}_norm_on_feature{}'.format(self.norm_method, self.built_times))
 
 
     def forward(self, tensor, **kwargs):

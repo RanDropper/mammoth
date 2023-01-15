@@ -62,7 +62,7 @@ class ModelBase(ModelPipeline):
                 self._InstanceNorms.append(
                     self._init_model_block('InstanceNorm', hp,
                                            name_suffix = method,
-                                           method = method,
+                                           norm_method = method,
                                            norm_col_idx = norm_col_idx)
                 )
         else:
