@@ -80,24 +80,42 @@ class ModelBase(ModelPipeline):
 
     def single_tsmodel(self, hp, seq_input, embed_input, masking, remainder, is_fcst):
         perc_horizon = hp.get('perc_horizon')
+        is_fork = hp.get('is_fork', False)
         
         if perc_horizon > self.input_settings.get('perc_horizon'):
             print("warnings: The tsmodel '{}' has perception horizon {}, which is larger than that defined in data processing.".format(self.name, perc_horizon))
 
-        enc_input, \
-        dec_input, \
-        his_masking, \
-        fut_masking = self._InitTransform(seq_input, masking=masking,
-                                          dynamic_feat = self.input_settings['dynamic_feat'],
-                                          seq_target = self.input_settings['seq_target'],
-                                          enc_feat = self.input_settings['enc_feat'],
-                                          dec_feat = self.input_settings['dec_feat'],
-                                          is_fcst = is_fcst,
-                                          remainder = remainder)
+        if is_fork:
+            if self._InstanceNorms is not None:
+                for IN in self._InstanceNorms:
+                    seq_input = IN(seq_input, masking=masking)
 
-        if self._InstanceNorms is not None:
-            for IN in self._InstanceNorms:
-                seq_input = IN(seq_input, masking = masking)
+            enc_input, \
+            dec_input, \
+            his_masking, \
+            fut_masking = self._InitTransform(seq_input, masking=masking,
+                                              dynamic_feat = self.input_settings['dynamic_feat'],
+                                              seq_target = self.input_settings['seq_target'],
+                                              enc_feat = self.input_settings['enc_feat'],
+                                              dec_feat = self.input_settings['dec_feat'],
+                                              is_fcst = is_fcst,
+                                              remainder = remainder)
+        else:
+            enc_input, \
+            dec_input, \
+            his_masking, \
+            fut_masking = self._InitTransform(seq_input, masking=masking,
+                                              dynamic_feat=self.input_settings['dynamic_feat'],
+                                              seq_target=self.input_settings['seq_target'],
+                                              enc_feat=self.input_settings['enc_feat'],
+                                              dec_feat=self.input_settings['dec_feat'],
+                                              is_fcst=is_fcst,
+                                              remainder=remainder)
+
+            if self._InstanceNorms is not None:
+                for IN in self._InstanceNorms:
+                    enc_input = IN(enc_input, masking = masking)
+                    dec_input = IN(dec_input, masking=masking)
         
         revin = RevIN(name='RevIN_{}'.format(self.built_times))
         enc_scaled, y_mean, y_std = revin(enc_input, his_masking)
