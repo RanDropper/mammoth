@@ -154,9 +154,7 @@ class InstanceNorm(ModelBlock):
         self._built_from_signature()
 
     def _built_from_signature(self):
-        self.IN = InstanceNormalization(axis=self.axis, method=self.norm_method,
-                                        affine=self.affine,
-                                        name='{}_norm_on_feature{}'.format(self.norm_method, self.built_times))
+        self.IN = InstanceNormalization(axis=self.axis, method=self.norm_method, affine=self.affine)
 
 
     def forward(self, tensor, **kwargs):
