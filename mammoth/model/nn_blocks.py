@@ -18,7 +18,7 @@ from mammoth.networks.normalization import InstanceNormalization
 
 class ModelBlock(Layer):
     def __init__(self, **kwargs):
-        super(ModelBlock, self).__init__(**kwargs)
+        super(ModelBlock, self).__init__()
         self.added_loss = None
 
     @tf.autograph.experimental.do_not_convert
