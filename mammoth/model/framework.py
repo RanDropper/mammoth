@@ -234,7 +234,7 @@ class ModelBase(ModelPipeline):
         if name_suffix is not None:
             name = '{}_{}_{}'.format(tmp_block.__name__, name_suffix, self.built_times)
         else:
-            name = '{}{}'.format(tmp_block.__name__, self.built_times)
+            name = '{}_{}'.format(tmp_block.__name__, self.built_times)
         tmp_block = tmp_block(hp, name=name, **kwargs)
             
         if tmp_block.added_loss is not None:
