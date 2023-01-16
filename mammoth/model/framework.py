@@ -114,8 +114,8 @@ class ModelBase(ModelPipeline):
 
             if self._InstanceNorms is not None:
                 for IN in self._InstanceNorms:
-                    enc_input = IN(enc_input, masking = masking)
-                    dec_input = IN(dec_input, masking=masking)
+                    enc_input = IN(enc_input, masking = his_masking)
+                    dec_input = IN(dec_input, masking = fut_masking)
         
         revin = RevIN(name='RevIN_{}'.format(self.built_times))
         enc_scaled, y_mean, y_std = revin(enc_input, his_masking)
