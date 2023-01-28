@@ -271,8 +271,9 @@ class DatasetBuilder(DataProcessing):
         seq_key = self.input_settings['seq_key']
         seq_label = self.input_settings['seq_label']
 
-        count = data.groupby(seq_key+seq_label)[seq_label].agg(['count']).reset_index()
-        count = count[count['count']>1].drop(columns=['count'])
+        data['_count_'] = 1
+        count = data.groupby(seq_key+seq_label)['_count_'].count().reset_index()
+        count = count[count['_count_']>1].drop(columns=['_count_'])
 
         if count.shape[0] > 0:
             raise NotImplementedError("The {} has duplicated rows: \n {}".format(name, count))
