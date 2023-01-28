@@ -95,6 +95,9 @@ def single_tsm(input_settings, train_settings,
     hyper_params = {'is_fork':is_fork}
     flow_blocks = {}
 
+    if not input_settings.get('is_dsbuilt', False):
+        raise NotImplementedError('The input parameter "input_settings" is not passed through function "dsbuilder". '
+                                  '"dsbuilder" function will return the variable "input_settings", which should be used here.')
     if norm_feat is not None:
         hyper_params.update({'norm_feat':norm_feat})
     if perc_horizon is not None:

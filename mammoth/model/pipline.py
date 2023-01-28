@@ -158,6 +158,7 @@ class ModelPipeline(metaclass = abc.ABCMeta):
 
     def predict_rolling(self, fcst_dataset, perc_horizon, fcst_horizon, batch_size=None):
         pred = []
+        embed_feat = self.input_settings['embed_feat']
         for i, tmp_dataset in enumerate(fcst_dataset):
             if i > 0:
                 if len(pred) > 1:
@@ -166,12 +167,18 @@ class ModelPipeline(metaclass = abc.ABCMeta):
                     former_pred = pred[0]
 
                 seq_input = np.array(list(tmp_dataset.map(lambda x: x[0]).as_numpy_iterator()))
-                embed_input = tmp_dataset.map(lambda x: x[1])
-                masking_input = tmp_dataset.map(lambda x: x[2])
+                if len(embed_feat) > 0:
+                    embed_input = tmp_dataset.map(lambda x: x[1])
+                    masking_input = tmp_dataset.map(lambda x: x[2])
+                else:
+                    masking_input = tmp_dataset.map(lambda x: x[1])
                 seq_input[:, -fcst_horizon * (i + 1):-fcst_horizon, 0:1] = former_pred[:, -min(fcst_horizon * i, perc_horizon):, :]
                 seq_input = tf.data.Dataset.from_tensor_slices(seq_input)
 
-                tmp_dataset = tf.data.Dataset.zip((seq_input, embed_input, masking_input))
+                if len(embed_feat) > 0:
+                    tmp_dataset = tf.data.Dataset.zip((seq_input, embed_input, masking_input))
+                else:
+                    tmp_dataset = tf.data.Dataset.zip((seq_input, masking_input))
                 tmp_dataset = tf.data.Dataset.zip((tmp_dataset,))
 
             tmp_pred = self.fcst_model.predict(tmp_dataset.batch(batch_size))

@@ -13,6 +13,7 @@ from mammoth.utils import sparsemax, scatter_update
 from mammoth.networks.attention import FullAttention, ProbAttention
 from mammoth.networks.scinet import SCINet
 from mammoth.networks.tabnet import TabNet
+from mammoth.networks.film import FiLM
 from mammoth.networks.normalization import InstanceNormalization
 
 
@@ -440,9 +441,27 @@ class SciEncoder(ModelBlock):
             return Concatenate()(stacked)
         else:
             return stacked[0]
+
+
+class FilmEncoder(ModelBlock):
+    def __init__(self, hp, name='FilmEncoder', **kwargs):
+        super(FilmEncoder, self).__init__(name=name, **kwargs)
+        self.hp = hp.copy()
+        self._build_from_signature()
+
+    def _build_from_signature(self):
+        fcst_horizon = self.hp.get('fcst_horizon')
+        perc_horizon = self.hp.get('perc_horizon')
+        modes = self.hp.get('modes', perc_horizon // 2)
+        compression = self.hp.get('compression', 0)
+        multiscale = self.hp.get('multiscale', [1, 2, 4])
+
+        self.film_layer = FiLM(fcst_horizon, perc_horizon, modes, compression, multiscale)
+
+    def forward(self, tensor, **kwargs):
+        return self.film_layer(tensor)
         
-        
-        
+
 class DenseDecoder(ModelBlock):
     def __init__(self, hp, name='DenseDecoder', **kwargs):
         super(DenseDecoder, self).__init__(name = name, **kwargs)

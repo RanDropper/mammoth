@@ -234,6 +234,9 @@ class DatasetBuilder(DataProcessing):
         
         
     def __call__(self, train_data, fcst_data, embed_data = None):
+        self._duplicate_checking(train_data, 'input training data')
+        self._duplicate_checking(fcst_data, 'input forecasting data')
+
         embed_init = self._embed_col_type_init(embed_data)
         
         train_data, val_data, embed_data, his_data = self.train_data_process(train_data, embed_init)
@@ -259,9 +262,21 @@ class DatasetBuilder(DataProcessing):
                                                                   fcst_embed_data,
                                                                   self.input_settings['n_fcst_samples'], 
                                                                   self.input_settings['fcst_seq_len'])
+
+        self.input_settings['is_dsbuilt'] = True
         return train_dataset, val_dataset, fcst_dataset, self.input_settings, prediction
-        
-        
+
+
+    def _duplicate_checking(self, data, name):
+        seq_key = self.input_settings['seq_key']
+        seq_label = self.input_settings['seq_label']
+
+        count = data.groupby(seq_key+seq_label)[seq_label].agg(['count']).reset_index()
+        count = count[count['count']>1].drop(columns=['count'])
+
+        if count.shape[0] > 0:
+            raise NotImplementedError("The {} has duplicated rows: \n {}".format(name, count))
+
         
     def train_data_process(self, data, embed_data):
         seq_key = self.input_settings['seq_key']
