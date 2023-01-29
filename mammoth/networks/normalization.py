@@ -13,44 +13,54 @@ class RevIN(Layer):
     "REVERSIBLE INSTANCE NORMALIZATION FOR ACCURATE TIME-SERIES FORECASTING AGAINST DISTRIBUTION SHIFT"
     However, here RevIN is only applied to target.
     """ 
-    def __init__(self, **kwargs):
+    def __init__(self, affine = True, **kwargs):
         super(RevIN, self).__init__(**kwargs)
+        self.affine = affine
     
     def build(self, input_shape):
-        self.affine_weight = self.add_weight(
-            name = 'affine_weight',
-            shape = (1,),
-            initializer = Ones(),
-            trainable = True,
-            dtype=self.dtype
-        )
-        self.affine_bias = self.add_weight(
-            name = 'affine_bias',
-            shape = (1,),
-            initializer = Zeros(),
-            trainable = True,
-            dtype=self.dtype
-        )
+        if self.affine:
+            self.affine_weight = self.add_weight(
+                name = 'affine_weight',
+                shape = (1,),
+                initializer = Ones(),
+                trainable = True,
+                dtype=self.dtype
+            )
+            self.affine_bias = self.add_weight(
+                name = 'affine_bias',
+                shape = (1,),
+                initializer = Zeros(),
+                trainable = True,
+                dtype=self.dtype
+            )
 
     def call(self, tensor, masking=None):
         y_mean = compute_normal_mean(tf.gather(tensor, [0], axis=-1), masking, axis=-2, keepdims=True)
         y_std = compute_normal_std(tf.gather(tensor, [0], axis=-1), masking, axis=-2, keepdims=True)
         
         y_scaled = tf.math.divide_no_nan(tf.gather(tensor, [0], axis=-1)-y_mean, y_std)
-        y_scaled = self.affine_weight * y_scaled + self.affine_bias
+        if self.affine:
+            y_scaled = self.affine_weight * y_scaled + self.affine_bias
         scaled_tensor = Concatenate()([y_scaled, tf.gather(tensor, np.arange(1, tensor.shape[-1]), axis=-1)])
 
         return scaled_tensor, y_mean, y_std
 
     def denormalize(self, tensor, y_mean, y_std):
-        return Denormalize()(tensor, y_mean, y_std, self.affine_bias, self.affine_weight)
+        if self.affine:
+            return Denormalize()(tensor, y_mean, y_std,
+                                 affine_bias = self.affine_bias,
+                                 affine_weight = self.affine_weight)
+        else:
+            return Denormalize()(tensor, y_mean, y_std)
 
 
 class Denormalize(Layer):
     def __init__(self, **kwargs):
         super(Denormalize, self).__init__(**kwargs)
 
-    def call(self, tensor, y_mean, y_std, affine_bias, affine_weight):
+    def call(self, tensor, y_mean, y_std, **kwargs):
+        affine_bias = kwargs.get('affine_bias')
+        affine_weight = kwargs.get('affine_weight')
         remainder = tensor.shape[1]
         y_mean = y_mean[:, -remainder:, :]
         y_std = y_std[:, -remainder:, :]
@@ -59,7 +69,10 @@ class Denormalize(Layer):
             y_mean = tf.expand_dims(y_mean, axis=2)
             y_std = tf.expand_dims(y_std, axis=2)
 
-        return tf.math.divide_no_nan(tensor - affine_bias, affine_weight) * y_std + y_mean
+        if affine_bias is not None:
+            tensor = tf.math.divide_no_nan(tensor - affine_bias, affine_weight)
+
+        return tensor * y_std + y_mean
     
 
 class InstanceNormalization(Layer):
@@ -88,21 +101,22 @@ class InstanceNormalization(Layer):
     def build(self, input_shape):
         input_shape = tf.TensorShape(input_shape)
         num_feat = input_shape[-1]
-        
-        self.affine_weight = self.add_weight(
-            name = 'affine_weight',
-            shape = (num_feat,),
-            initializer = Ones(),
-            trainable = True,
-            dtype=self.dtype
-        )
-        self.affine_bias = self.add_weight(
-            name = 'affine_bias',
-            shape = (num_feat,),
-            initializer = Zeros(),
-            trainable = True,
-            dtype=self.dtype
-        )
+
+        if self.affine:
+            self.affine_weight = self.add_weight(
+                name = 'affine_weight',
+                shape = (num_feat,),
+                initializer = Ones(),
+                trainable = True,
+                dtype=self.dtype
+            )
+            self.affine_bias = self.add_weight(
+                name = 'affine_bias',
+                shape = (num_feat,),
+                initializer = Zeros(),
+                trainable = True,
+                dtype=self.dtype
+            )
         
     
     def call(self, tensor, ref_tensor = None, masking = None):

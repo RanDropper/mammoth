@@ -39,7 +39,7 @@ class ModelPipeline(metaclass = abc.ABCMeta):
     
     
     @counter
-    def build(self, remainder = None):
+    def build(self):
         remainder = self.input_settings.get('val_len')
         
         optimizer = get_optimizer_func(self.train_settings['optimizer'])

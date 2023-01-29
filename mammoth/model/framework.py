@@ -1,4 +1,3 @@
-import tensorflow as tf
 from tensorflow.keras.layers import Concatenate, ZeroPadding1D, Lambda, Reshape, Multiply
 from tensorflow.keras.optimizers import *
 import tensorflow.keras.backend as k
@@ -8,6 +7,7 @@ from mammoth.utils import compute_normal_mean, compute_normal_std
 from mammoth.losses import PearsonCoef
 from mammoth.model.pipline import ModelPipeline
 from mammoth.model.nn_blocks import *
+from mammoth.model.preprocess import ForkTransform, MovingWindowTransform, TSInstanceNormalization
 
 
 class ModelBase(ModelPipeline):
@@ -56,17 +56,15 @@ class ModelBase(ModelPipeline):
         is_fork = hp.get('is_fork', False)
 
         if norm_feat is not None:
-            self._InstanceNorms = []
+            self._TSInNorms = []
             for method in norm_feat.keys():
-                norm_col_idx = hp['{}_norm_idx'.format(method)]
-                self._InstanceNorms.append(
-                    self._init_model_block('InstanceNorm', hp,
+                self._TSInNorms.append(
+                    self._init_model_block('TSInstanceNormalization', hp,
                                            name_suffix = method,
-                                           norm_method = method,
-                                           norm_col_idx = norm_col_idx)
+                                           norm_method = method)
                 )
         else:
-            self._InstanceNorms = None
+            self._TSInNorms = None
 
         if is_fork:
             self._InitTransform = self._init_model_block('ForkTransform', hp)
@@ -80,44 +78,28 @@ class ModelBase(ModelPipeline):
 
     def single_tsmodel(self, hp, seq_input, embed_input, masking, remainder, is_fcst):
         perc_horizon = hp.get('perc_horizon')
-        is_fork = hp.get('is_fork', False)
         
         if perc_horizon > self.input_settings.get('perc_horizon'):
             print("warnings: The tsmodel '{}' has perception horizon {}, which is larger than that defined in data processing.".format(self.name, perc_horizon))
 
-        if is_fork:
-            if self._InstanceNorms is not None:
-                for IN in self._InstanceNorms:
-                    seq_input = IN(seq_input, masking=masking)
-
-            enc_input, \
-            dec_input, \
-            his_masking, \
-            fut_masking = self._InitTransform(seq_input, masking=masking,
-                                              dynamic_feat = self.input_settings['dynamic_feat'],
-                                              seq_target = self.input_settings['seq_target'],
-                                              enc_feat = self.input_settings['enc_feat'],
-                                              dec_feat = self.input_settings['dec_feat'],
-                                              is_fcst = is_fcst,
-                                              remainder = remainder)
-        else:
-            enc_input, \
-            dec_input, \
-            his_masking, \
-            fut_masking = self._InitTransform(seq_input, masking=masking,
-                                              dynamic_feat=self.input_settings['dynamic_feat'],
-                                              seq_target=self.input_settings['seq_target'],
-                                              enc_feat=self.input_settings['enc_feat'],
-                                              dec_feat=self.input_settings['dec_feat'],
-                                              is_fcst=is_fcst,
-                                              remainder=remainder)
-
-            if self._InstanceNorms is not None:
-                for IN in self._InstanceNorms:
-                    enc_input = IN(enc_input, masking = his_masking)
-                    dec_input = IN(dec_input, masking = fut_masking)
+        enc_input, \
+        dec_input, \
+        his_masking, \
+        fut_masking = self._InitTransform(seq_input, masking=masking,
+                                          dynamic_feat=self.input_settings['dynamic_feat'],
+                                          seq_target=self.input_settings['seq_target'],
+                                          enc_feat=self.input_settings['enc_feat'],
+                                          dec_feat=self.input_settings['dec_feat'],
+                                          is_fcst=is_fcst,
+                                          remainder=remainder)
+        if self._TSInNorms is not None:
+            for TSIn in self._TSInNorms:
+                enc_input, dec_input = TSIn(enc_input,
+                                            dec_tensor=dec_input,
+                                            his_masking=his_masking,
+                                            fut_masking=fut_masking)
         
-        revin = RevIN(name='RevIN_{}'.format(self.built_times))
+        revin = RevIN(hp.get('is_y_affine', True), name='RevIN_{}'.format(self.built_times))
         enc_scaled, y_mean, y_std = revin(enc_input, his_masking)
 
         Sliced = Lambda(lambda x:x[:, -fut_masking.shape[1]:, :], name='slice_encoder_output_{}'.format(self.built_times))
@@ -202,17 +184,27 @@ class ModelBase(ModelPipeline):
         self.hyper_params['window_freq'] = self.input_settings['window_freq']
 
         norm_feat = self.hyper_params.get('norm_feat')
-        dynamic_feat = self.input_settings['dynamic_feat']
+        enc_feat = self.input_settings['enc_feat']
+        dec_feat = self.input_settings['dec_feat']
         if norm_feat is not None:
             if not isinstance(norm_feat, dict):
                 raise TypeError("""The dtype of hyper parameter 'norm_feat' should be 'dict', 
                  and in the format as follows: {method: [col_1, col_2, ..., col_n]}.
                  """)
             for method, cols in norm_feat.items():
-                norm_col_idx = [dynamic_feat.index(i) for i in cols]
-                self.hyper_params['{}_norm_idx'.format(method)] = norm_col_idx
-        
-        
+                enc_norm_col_idx = [enc_feat.index(i)+1 for i in cols]
+                dec_norm_col_idx = []
+                dec_enc_norm_col_idx = {}
+                for col in dec_feat:
+                    if col in enc_feat:
+                        dec_enc_norm_col_idx[dec_feat.index(col)] = enc_feat.index(col)+1
+                    else:
+                        dec_norm_col_idx.append(dec_feat.index(col))
+                self.hyper_params['{}_enc_norm_idx'.format(method)] = enc_norm_col_idx
+                self.hyper_params['{}_dec_norm_idx'.format(method)] = dec_norm_col_idx
+                self.hyper_params['{}_dec_enc_norm_idx'.format(method)] = dec_enc_norm_col_idx
+
+
     def _update_model_name(self):
         if self.name is None:
             encoder = self.hyper_params['flow_blocks'].get('Encoder')

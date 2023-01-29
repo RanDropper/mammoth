@@ -9,6 +9,8 @@ def single_tsm(input_settings, train_settings,
                recoder = {'ConvRecoder':{}}, 
                output = {'MlpOutput':{}},
                is_fork = False,
+               is_y_affine = True,
+               is_feat_affine = True,
                norm_feat = None,
                perc_horizon = None):
     """ The single time series model, without stack.
@@ -77,6 +79,10 @@ def single_tsm(input_settings, train_settings,
         is_fork: Whether use fork training. Fork training is only available to RNN-based and RNN-based models, e.g. 'WaveNet' and 'SCINet'.
                     Fork training can save memory and speed up training process.
 
+        is_y_affine: Whether add affine weight and bias when apply normalization to 'y'. default: True.
+
+        is_feat_affine: Whether add affine weight and bias when apply normalization to exogenous features. default: True.
+
         norm_feat: A dictionary whose key is the normalization methods, and value is a iterable object that contains features you want to normalize. 
                     e.g. {'standard':['f1', 'f2']}. There are 4 normalization methods:
             * standard: $\frac{x-avg(x)}{std(x)}$
@@ -92,7 +98,7 @@ def single_tsm(input_settings, train_settings,
     Return:
         The untrained model with object type 'ModelBase'
     """
-    hyper_params = {'is_fork':is_fork}
+    hyper_params = {'is_fork':is_fork, 'is_y_affine':is_y_affine, 'is_feat_affine':is_feat_affine}
     flow_blocks = {}
 
     if not input_settings.get('is_dsbuilt', False):
