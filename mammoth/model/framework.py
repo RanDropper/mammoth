@@ -195,11 +195,12 @@ class ModelBase(ModelPipeline):
                 enc_norm_col_idx = [enc_feat.index(i)+1 for i in cols]
                 dec_norm_col_idx = []
                 dec_enc_norm_col_idx = {}
-                for col in dec_feat:
-                    if col in enc_feat:
-                        dec_enc_norm_col_idx[dec_feat.index(col)] = enc_feat.index(col)+1
-                    else:
-                        dec_norm_col_idx.append(dec_feat.index(col))
+                for col in cols:
+                    if col in dec_feat:
+                        if col in enc_feat:
+                            dec_enc_norm_col_idx[dec_feat.index(col)] = enc_feat.index(col)+1
+                        else:
+                            dec_norm_col_idx.append(dec_feat.index(col))
                 self.hyper_params['{}_enc_norm_idx'.format(method)] = enc_norm_col_idx
                 self.hyper_params['{}_dec_norm_idx'.format(method)] = dec_norm_col_idx
                 self.hyper_params['{}_dec_enc_norm_idx'.format(method)] = dec_enc_norm_col_idx
