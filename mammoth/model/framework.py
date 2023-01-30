@@ -7,7 +7,7 @@ from mammoth.utils import compute_normal_mean, compute_normal_std
 from mammoth.losses import PearsonCoef
 from mammoth.model.pipline import ModelPipeline
 from mammoth.model.nn_blocks import *
-from mammoth.model.preprocess import ForkTransform, MovingWindowTransform, TSInstanceNormalization
+from mammoth.model.preprocess import MovingWindowTransform, TSInstanceNormalization, SplitHisFut
 
 
 class ModelBase(ModelPipeline):
@@ -55,21 +55,21 @@ class ModelBase(ModelPipeline):
         norm_feat = hp.get('norm_feat')
         is_fork = hp.get('is_fork', False)
 
+        if not is_fork:
+            self._MwTransform = self._init_model_block('MovingWindowTransform', hp)
+        else:
+            self._MwTransform = None
         if norm_feat is not None:
             self._TSInNorms = []
             for method in norm_feat.keys():
                 self._TSInNorms.append(
                     self._init_model_block('TSInstanceNormalization', hp,
-                                           name_suffix = method,
-                                           norm_method = method)
+                                           name_suffix=method,
+                                           norm_method=method)
                 )
         else:
             self._TSInNorms = None
-
-        if is_fork:
-            self._InitTransform = self._init_model_block('ForkTransform', hp)
-        else:
-            self._InitTransform = self._init_model_block('MovingWindowTransform', hp)
+        self._SplitHisFut = self._init_model_block('SplitHisFut', hp)
         self._Encoder = self._init_model_block(flow_blocks.get('Encoder'), hp)
         self._Decoder = self._init_model_block(flow_blocks.get('Decoder'), hp)
         self._Recoder = self._init_model_block(flow_blocks.get('Recoder'), hp)
@@ -82,22 +82,23 @@ class ModelBase(ModelPipeline):
         if perc_horizon > self.input_settings.get('perc_horizon'):
             print("warnings: The tsmodel '{}' has perception horizon {}, which is larger than that defined in data processing.".format(self.name, perc_horizon))
 
+        if self._MwTransform is not None:
+            seq_input, masking = self._MwTransform(seq_input, masking=masking, is_fcst=is_fcst)
+
+        if self._TSInNorms is not None:
+            for TSIN in self._TSInNorms:
+                seq_input = TSIN(seq_input, masking=masking)
+
         enc_input, \
         dec_input, \
         his_masking, \
-        fut_masking = self._InitTransform(seq_input, masking=masking,
-                                          dynamic_feat=self.input_settings['dynamic_feat'],
-                                          seq_target=self.input_settings['seq_target'],
-                                          enc_feat=self.input_settings['enc_feat'],
-                                          dec_feat=self.input_settings['dec_feat'],
-                                          is_fcst=is_fcst,
-                                          remainder=remainder)
-        if self._TSInNorms is not None:
-            for TSIn in self._TSInNorms:
-                enc_input, dec_input = TSIn(enc_input,
-                                            dec_tensor=dec_input,
-                                            his_masking=his_masking,
-                                            fut_masking=fut_masking)
+        fut_masking = self._SplitHisFut(seq_input, masking=masking,
+                                        dynamic_feat=self.input_settings['dynamic_feat'],
+                                        seq_target=self.input_settings['seq_target'],
+                                        enc_feat=self.input_settings['enc_feat'],
+                                        dec_feat=self.input_settings['dec_feat'],
+                                        is_fcst=is_fcst,
+                                        remainder=remainder)
         
         revin = RevIN(hp.get('is_y_affine', True), name='RevIN_{}'.format(self.built_times))
         enc_scaled, y_mean, y_std = revin(enc_input, his_masking)
@@ -184,26 +185,15 @@ class ModelBase(ModelPipeline):
         self.hyper_params['window_freq'] = self.input_settings['window_freq']
 
         norm_feat = self.hyper_params.get('norm_feat')
-        enc_feat = self.input_settings['enc_feat']
-        dec_feat = self.input_settings['dec_feat']
+        dynamic_feat = self.input_settings['dynamic_feat']
         if norm_feat is not None:
             if not isinstance(norm_feat, dict):
                 raise TypeError("""The dtype of hyper parameter 'norm_feat' should be 'dict', 
                  and in the format as follows: {method: [col_1, col_2, ..., col_n]}.
                  """)
             for method, cols in norm_feat.items():
-                enc_norm_col_idx = [enc_feat.index(i)+1 for i in cols]
-                dec_norm_col_idx = []
-                dec_enc_norm_col_idx = {}
-                for col in cols:
-                    if col in dec_feat:
-                        if col in enc_feat:
-                            dec_enc_norm_col_idx[dec_feat.index(col)] = enc_feat.index(col)+1
-                        else:
-                            dec_norm_col_idx.append(dec_feat.index(col))
-                self.hyper_params['{}_enc_norm_idx'.format(method)] = enc_norm_col_idx
-                self.hyper_params['{}_dec_norm_idx'.format(method)] = dec_norm_col_idx
-                self.hyper_params['{}_dec_enc_norm_idx'.format(method)] = dec_enc_norm_col_idx
+                norm_col_idx = [dynamic_feat.index(i) for i in cols]
+                self.hyper_params['{}_norm_idx'.format(method)] = norm_col_idx
 
 
     def _update_model_name(self):

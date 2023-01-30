@@ -8,11 +8,11 @@ def single_tsm(input_settings, train_settings,
                decoder = {'DenseDecoder':{}}, 
                recoder = {'ConvRecoder':{}}, 
                output = {'MlpOutput':{}},
-               is_fork = False,
-               is_y_affine = True,
-               is_feat_affine = True,
                norm_feat = None,
-               perc_horizon = None):
+               perc_horizon = None,
+               is_fork=False,
+               is_y_affine=True,
+               is_feat_affine=True):
     """ The single time series model, without stack.
 
     Arguments:
@@ -76,13 +76,6 @@ def single_tsm(input_settings, train_settings,
             * AttentionOutput: The attention mechanism applied on the feature dimension. Usually used in attention-related models, e.g. Informer.
             * TabnetOutput: Using TabNet for the final regression or classification. For TabNet, please refer to https://arxiv.org/pdf/1908.07442v5.pdf.
 
-        is_fork: Whether use fork training. Fork training is only available to RNN-based and RNN-based models, e.g. 'WaveNet' and 'SCINet'.
-                    Fork training can save memory and speed up training process.
-
-        is_y_affine: Whether add affine weight and bias when apply normalization to 'y'. default: True.
-
-        is_feat_affine: Whether add affine weight and bias when apply normalization to exogenous features. default: True.
-
         norm_feat: A dictionary whose key is the normalization methods, and value is a iterable object that contains features you want to normalize. 
                     e.g. {'standard':['f1', 'f2']}. There are 4 normalization methods:
             * standard: $\frac{x-avg(x)}{std(x)}$
@@ -94,6 +87,13 @@ def single_tsm(input_settings, train_settings,
 
         perc_horizon: The length of looking back window. If None, it will be the same with that defined in 'input_settings'.
                     If not None, the value will replace the original 'perc_horizon' defined in 'input_settings'. default: None.
+
+        is_fork: Whether use fork training. Fork training is only available to RNN-based and RNN-based models, e.g. 'WaveNet' and 'SCINet'.
+                    Fork training can save memory and speed up training process.
+
+        is_y_affine: Whether add affine weight and bias when apply normalization to 'y'. default: True.
+
+        is_feat_affine: Whether add affine weight and bias when apply normalization to exogenous features. default: True.
     
     Return:
         The untrained model with object type 'ModelBase'
