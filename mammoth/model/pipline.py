@@ -47,6 +47,7 @@ class ModelPipeline(metaclass = abc.ABCMeta):
         loss_func = self.train_settings['loss_func']
         loss_weights = self.train_settings['loss_weights']
         weighted_metrics = self.train_settings['weighted_metrics']
+        error_bound = self.train_settings['error_bound']
         
         self.built_times = self.build.count
 
@@ -56,8 +57,14 @@ class ModelPipeline(metaclass = abc.ABCMeta):
                 inputs = self.model_input(seq_len)
 
                 output = self.NN(**inputs)
-                
-                model = TSModel(inputs = [i for i in inputs.values() if i is not None], outputs = output)
+
+                if error_bound is not None:
+                    model = TSModel(inputs = [i for i in inputs.values() if i is not None], outputs=output, error_bound=True,
+                                    ema_decay=error_bound.get('ema_decay',0.99),
+                                    epsilon=error_bound.get('epsilon',0.01),
+                                    loss_threshold=error_bound.get('loss_threshold',1.))
+                else:
+                    model = TSModel(inputs = [i for i in inputs.values() if i is not None], outputs = output)
                 model.compile(loss = loss_func, 
                               loss_weights = loss_weights,
                               optimizer = optimizer(learning_rate=learning_rate),
@@ -73,10 +80,19 @@ class ModelPipeline(metaclass = abc.ABCMeta):
                 seq_len = self.input_settings.get('val_seq_len')
                 eval_inputs = self.model_input(seq_len)
                 eval_output = self.NN(**eval_inputs, remainder = remainder)
-            
-                model = TSModel(inputs = [i for i in train_inputs.values() if i is not None], 
-                                outputs = train_output,
-                                evaluates = ([i for i in eval_inputs.values() if i is not None], eval_output))
+
+                if error_bound is not None:
+                    model = TSModel(inputs=[i for i in train_inputs.values() if i is not None],
+                                    outputs=train_output,
+                                    evaluates=([i for i in eval_inputs.values() if i is not None], eval_output),
+                                    error_bound=True,
+                                    ema_decay=error_bound.get('ema_decay',0.99),
+                                    epsilon=error_bound.get('epsilon',0.01),
+                                    loss_threshold=error_bound.get('loss_threshold',1.))
+                else:
+                    model = TSModel(inputs = [i for i in train_inputs.values() if i is not None],
+                                    outputs = train_output,
+                                    evaluates = ([i for i in eval_inputs.values() if i is not None], eval_output))
                 model.compile(loss = loss_func, 
                               loss_weights = loss_weights,
                               optimizer = optimizer(learning_rate=learning_rate),

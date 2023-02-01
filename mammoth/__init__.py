@@ -39,6 +39,7 @@ def single_tsm(input_settings, train_settings,
             * use_multiprocessing -> Same parameter in 'tensorflow.keras.model.Model.fit'. Note that: 'multiprocessing' is not
                                         available when used GPU numbers < 2 or tensorflow version < 2.5.0. default: True. 
             * shuffle -> Same parameter in 'tensorflow.keras.model.Model.fit'. default: True.
+            * error_bound -> Please refer to "WaveBound": https://arxiv.org/pdf/2210.14303v1.pdf. default: None
         
         embedding: A dictionary whose key is the method of embedding, normally string type, and value is also a dictionary
                     which contains the hyperparameter for embedding(e.g. {'SimpleEmbedding':{'n_embed_layers':2}}).

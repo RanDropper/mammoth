@@ -5,17 +5,43 @@ from tensorflow.python.keras.engine import data_adapter
 
 
 class TSModel(Model):
-    def __init__(self, inputs, outputs, evaluates=None, **kwargs):
+    def __init__(self, inputs, outputs, evaluates=None,
+                 error_bound=False, ema_decay=0.99, epsilon=0.01, loss_threshold=1., **kwargs):
         '''
         evaluates: <tuple> (x_eval, y_eval)
         '''
         super(TSModel, self).__init__(inputs, outputs, **kwargs)
-            
         if evaluates is None:
             self.eval_model = None
         else:
             self.eval_model = TSModel(inputs = evaluates[0], outputs = evaluates[1], trainable = False)
 
+        self.error_bound = error_bound
+        if error_bound:
+            self.target_model = TSModel(inputs = inputs, outputs = outputs, trainable = True)
+            self.ema_decay = ema_decay
+            self.epsilon = epsilon
+            self.loss_threshold = loss_threshold
+        else:
+            self.target_model = None
+
+    def train_step(self, data):
+        x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
+
+        with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)
+            loss = self.compute_loss(x, y, y_pred, sample_weight)
+            Eloss = tf.reduce_mean(loss)
+            if (self.error_bound) and (Eloss<=self.loss_threshold):
+                y_pred_t = self.target_model(x, training=True)
+                loss_t = self.compute_loss(x, y, y_pred_t, sample_weight)
+                loss = tf.abs(loss - loss_t + self.epsilon)+loss_t
+        self._validate_target_and_loss(y, loss)
+
+        self.optimizer.minimize(loss, self.trainable_variables, tape=tape)
+        if (self.error_bound) and (Eloss<=self.loss_threshold):
+            self.ema_weights_interactive()
+        return self.compute_metrics(x, y, y_pred, sample_weight)
     
     def test_step(self, data):
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
@@ -29,15 +55,26 @@ class TSModel(Model):
         self.compiled_metrics.update_state(y, y_pred, sample_weight)
         
         return {m.name: m.result() for m in self.metrics}
-    
-    
+
     def copy_weights_in_training(self):
         for layer in self.layers:
             if len(layer.weights) > 0:
                 try:
                     self.eval_model.get_layer(layer.name).set_weights( self.get_layer(layer.name).get_weights() )
                 except ValueError:
-                    pass
+                    if 'ts_model' not in layer.name:
+                        print('warnings: The weight of Layer {} is not copied to validation model successfully.'.format(layer.name))
+
+    def ema_weights_interactive(self):
+        for layer in self.layers:
+            if len(layer.weights) > 0:
+                if 'ts_model' not in layer.name:
+                    target_weights = self.target_model.get_layer(layer.name).get_weights()
+                    source_weights = self.get_layer(layer.name).get_weights()
+                    target_weights_new = []
+                    for i in range(len(target_weights)):
+                        target_weights_new.append(self.ema_decay*target_weights[i] + (1-self.ema_decay)*source_weights[i])
+                    self.target_model.get_layer(layer.name).set_weights(target_weights_new)
 
 
 class ModelBlock(Layer):

@@ -43,7 +43,8 @@ class ModelBase(ModelPipeline):
                          'validation_batch_size': None,
                          'validation_freq': 1,
                          'use_multiprocessing': True,
-                         'shuffle': True}
+                         'shuffle': True,
+                         'error_bound': None}
         
         for key, value in _default_dict.items():
             if self.train_settings.get(key) is None:
