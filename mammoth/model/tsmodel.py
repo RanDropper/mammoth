@@ -31,6 +31,21 @@ class TSModel(Model):
             y, y_pred, sample_weight, regularization_losses=self.losses
         )
 
+    def compute_metrics(self, x, y, y_pred, sample_weight):
+        del x  # The default implementation does not use `x`.
+        self.compiled_metrics.update_state(y, y_pred, sample_weight)
+        return self.get_metrics_result()
+
+    def get_metrics_result(self):
+        return_metrics = {}
+        for metric in self.metrics:
+            result = metric.result()
+            if isinstance(result, dict):
+                return_metrics.update(result)
+            else:
+                return_metrics[metric.name] = result
+        return return_metrics
+
     def train_step(self, data):
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
 
@@ -42,7 +57,6 @@ class TSModel(Model):
                 y_pred_t = self.target_model(x, training=True)
                 loss_t = self.compute_loss(x, y, y_pred_t, sample_weight)
                 loss = tf.abs(loss - loss_t + self.epsilon)+loss_t
-        self._validate_target_and_loss(y, loss)
 
         self.optimizer.minimize(loss, self.trainable_variables, tape=tape)
         if (self.error_bound) and (Eloss<=self.loss_threshold):
