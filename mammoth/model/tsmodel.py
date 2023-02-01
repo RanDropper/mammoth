@@ -25,6 +25,12 @@ class TSModel(Model):
         else:
             self.target_model = None
 
+    def compute_loss(self, x=None, y=None, y_pred=None, sample_weight=None):
+        del x  # The default implementation does not use `x`.
+        return self.compiled_loss(
+            y, y_pred, sample_weight, regularization_losses=self.losses
+        )
+
     def train_step(self, data):
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
 
