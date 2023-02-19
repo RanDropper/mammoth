@@ -13,6 +13,7 @@ from mammoth.networks.attention import FullAttention, ProbAttention
 from mammoth.networks.scinet import SCINet
 from mammoth.networks.tabnet import TabNet
 from mammoth.networks.film import FiLM
+from mammoth.networks.mts_mixer import MtsMixer
 from mammoth.model.tsmodel import ModelBlock
 
 
@@ -311,6 +312,32 @@ class FilmEncoder(ModelBlock):
 
     def forward(self, tensor, **kwargs):
         return self.film_layer(tensor)
+
+
+class MixerEncoder(ModelBlock):
+    def __init__(self, hp, name='MixerEncoder', **kwargs):
+        super(MixerEncoder, self).__init__(name=name, **kwargs)
+        self.hp = hp.copy()
+        self._build_from_signature()
+
+    def _build_from_signature(self):
+        n_blocks = self.hp.get('n_blocks', 1)
+        n_sub_seqs = self.hp.get('n_sub_seqs', 2)
+        temp_hidden_dims = self.hp.get('tmp_hidden_dims', 16)
+        channel_hidden_dims = self.hp.get('channel_hidden_dims', 8)
+        enc_l1_regular = self.hp.get('enc_l1_regular', 0.0)
+        self.mixer_list = [MtsMixer(n_sub_seqs, temp_hidden_dims, channel_hidden_dims, enc_l1_regular) for n in range(n_blocks)]
+
+    def forward(self, tensor, **kwargs):
+        stacked = []
+        for mixer in self.mixer_list:
+            single_out = mixer(tensor)
+            stacked.append(single_out)
+
+        if len(stacked) > 1:
+            return Concatenate()(stacked)
+        else:
+            return stacked[0]
         
 
 class DenseDecoder(ModelBlock):
