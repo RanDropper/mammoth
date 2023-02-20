@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+from mammoth.ts_cluster import ts_kmeans
 from mammoth.networks.normalization import MinMaxNorm, StandardNorm, MeanNorm, MaxAbsNorm
 
 class DataProcessing:
@@ -227,10 +228,11 @@ class DatasetBuilder(DataProcessing):
         input_settings: <dictionary> Updated input_settings.
         prediction: <pandas.DataFrame> The primary key frame of forecast, including seq_key and seq_label.
     """
-    def __init__(self, input_settings, method='memory', nsplits=None):
+    def __init__(self, input_settings, method='memory', nsplits=None, n_clusters=1):
         super(DatasetBuilder, self).__init__(input_settings)
         self.method = method
         self.nsplits = nsplits
+        self.n_clusters = n_clusters
         
         
     def __call__(self, train_data, fcst_data, embed_data = None):
@@ -244,24 +246,35 @@ class DatasetBuilder(DataProcessing):
         fcst_data, fcst_embed_data, prediction = self.fcst_data_process(fcst_data, his_data, embed_init)
         
         if self.method == 'memory':
-            train_dataset = self.convert_to_dataset_in_memory(train_data, 
-                                                              embed_data, 
-                                                              self.input_settings['n_train_samples'], 
-                                                              self.input_settings['train_seq_len'])
-            
-            if self.input_settings.get('val_rate') is not None:
-                val_dataset = self.convert_to_dataset_in_memory(val_data, 
-                                                                embed_data,
-                                                                self.input_settings['n_train_samples'], 
-                                                                self.input_settings['val_seq_len'],
-                                                                remainder = self.input_settings['remainder'])
+            if self.n_clusters > 1:
+                prediction_ = prediction.copy()
+                train_dataset = []
+                val_dataset = []
+                fcst_dataset = []
+                prediction = []
+                default = self.cluster['cluster'].value_counts().index[0]
+                self.cluster = fcst_data[self.input_settings['seq_key']].drop_duplicates().merge(self.cluster, how='left')
+                self.cluster.fillna(default, inplace=True)
+                self.input_settings['cluster_info'] = self.cluster
+                for clabel in self.cluster['cluster'].unique():
+                    key_frame = self.cluster[self.cluster['cluster']==clabel].drop(columns=['cluster'])
+                    tmp_train_dataset, \
+                    tmp_val_dataset, \
+                    tmp_fcst_dataset = self.build_dataset_in_memory(train_data.merge(key_frame),
+                                                                    embed_data.merge(key_frame),
+                                                                    val_data.merge(key_frame),
+                                                                    fcst_data.merge(key_frame),
+                                                                    fcst_embed_data.merge(key_frame),
+                                                                    key_frame.shape[0])
+                    train_dataset.append(tmp_train_dataset)
+                    val_dataset.append(tmp_val_dataset)
+                    fcst_dataset.append(tmp_fcst_dataset)
+                    prediction.append(prediction_.merge(key_frame))
             else:
-                val_dataset = None
-
-            fcst_dataset = self.convert_to_fcst_dataset_in_memory(fcst_data, 
-                                                                  fcst_embed_data,
-                                                                  self.input_settings['n_fcst_samples'], 
-                                                                  self.input_settings['fcst_seq_len'])
+                train_dataset, \
+                val_dataset, \
+                fcst_dataset = self.build_dataset_in_memory(train_data, embed_data, val_data, fcst_data, fcst_embed_data,
+                                                            self.input_settings['n_train_samples'])
 
         self.input_settings['is_dsbuilt'] = True
         return train_dataset, val_dataset, fcst_dataset, self.input_settings, prediction
@@ -277,6 +290,28 @@ class DatasetBuilder(DataProcessing):
 
         if count.shape[0] > 0:
             raise NotImplementedError("The {} has duplicated rows: \n {}".format(name, count))
+
+
+    def build_dataset_in_memory(self, train_data, embed_data, val_data, fcst_data, fcst_embed_data, n_samples):
+        train_dataset = self.convert_to_dataset_in_memory(train_data,
+                                                          embed_data,
+                                                          n_samples,
+                                                          self.input_settings['train_seq_len'])
+
+        if self.input_settings.get('val_rate') is not None:
+            val_dataset = self.convert_to_dataset_in_memory(val_data,
+                                                            embed_data,
+                                                            n_samples,
+                                                            self.input_settings['val_seq_len'],
+                                                            remainder=self.input_settings['remainder'])
+        else:
+            val_dataset = None
+
+        fcst_dataset = self.convert_to_fcst_dataset_in_memory(fcst_data,
+                                                              fcst_embed_data,
+                                                              n_samples,
+                                                              self.input_settings['fcst_seq_len'])
+        return train_dataset, val_dataset, fcst_dataset
 
         
     def train_data_process(self, data, embed_data):
@@ -311,6 +346,11 @@ class DatasetBuilder(DataProcessing):
         
         data = self.weight_settings(data, seq_key, perc_horizon, min_avail_perc_rate)
         data = self.sample_selection(data, seq_key, min_avail_seq_rate)
+
+        if self.n_clusters > 1:
+            X = data[seq_target].values.reshape((n_samples, seq_len*len(seq_target)))
+            self.cluster = data[seq_key].drop_duplicates()
+            self.cluster['cluster'] = ts_kmeans(X, self.n_clusters)
         
         if len(embed_feat) > 0:
             embed_data = self.embed_label_encoder(data[seq_key].drop_duplicates(), embed_data.drop_duplicates(seq_key), embed_feat)
