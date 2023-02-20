@@ -261,8 +261,8 @@ class DatasetBuilder(DataProcessing):
                     tmp_train_dataset, \
                     tmp_val_dataset, \
                     tmp_fcst_dataset = self.build_dataset_in_memory(train_data.merge(key_frame),
-                                                                    embed_data.merge(key_frame),
-                                                                    val_data.merge(key_frame),
+                                                                    embed_data if None else embed_data.merge(key_frame),
+                                                                    val_data if None else val_data.merge(key_frame),
                                                                     fcst_data.merge(key_frame),
                                                                     fcst_embed_data.merge(key_frame),
                                                                     key_frame.shape[0])
