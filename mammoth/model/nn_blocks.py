@@ -37,6 +37,45 @@ class SimpleEmbedding(ModelBlock):
         for layer in self.dense_list:
             tensor = layer(tensor)
         return tensor
+
+
+class FactorizedEmbedding(ModelBlock):
+    def __init__(self, hp, name='FactorizedEmbedding', **kwargs):
+        super(FactorizedEmbedding, self).__init__(name = name, **kwargs)
+        self.hp = hp.copy()
+
+    def build(self, input_shape):
+        depart_idx = self.hp.get('depart_idx', [[i for i in range(input_shape[-1])]])
+        embed_hidden_dims = self.hp.get('embed_hidden_dims', [input_shape[-1]*2])
+        n_embed_layers = self.hp.get('n_embed_layers', 1)
+        embed_out_dim = self.hp.get('embed_out_dim', input_shape[-1])
+        embed_activation = self.hp.get('embed_activation', None)
+        embed_l1_regular = self.hp.get('embed_l1_regular', 0)
+        self.depart_idx = depart_idx
+
+        self.depart_dense_list = []
+        for i in range(len(depart_idx)):
+            dense_list = [Dense(embed_hidden_dims[i],
+                                activation = embed_activation,
+                                kernel_regularizer=L1(embed_l1_regular),
+                                name='depart_{}_{}'.format(self.name, i)) for i in range(n_embed_layers)]
+            self.depart_dense_list.append(dense_list)
+        self.concat_dense = Dense(1, use_bias=False, name='concat_{}'.format(self.name))
+        self.output_dense = Dense(embed_out_dim,
+                                  activation = embed_activation,
+                                  kernel_regularizer=L1(embed_l1_regular),
+                                  name='output_{}'.format(self.name))
+
+    def forward(self, tensor, **kwargs):
+        embed_split = []
+        for idx in self.depart_idx:
+            embed_split.append(tf.gather(tensor, idx, axis=-1))
+        for i in range(len(embed_split)):
+            for tmp_dense in self.depart_dense_list[i]:
+                embed_split[i] = tmp_dense(embed_split[i])
+        embed_concat = tf.squeeze(self.concat_dense(tf.stack(embed_split, axis=-1)), axis=-1)
+        embed_output = self.output_dense(embed_concat)
+        return embed_output
     
     
 class AttentionStack(ModelBlock):
