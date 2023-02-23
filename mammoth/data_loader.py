@@ -228,11 +228,12 @@ class DatasetBuilder(DataProcessing):
         input_settings: <dictionary> Updated input_settings.
         prediction: <pandas.DataFrame> The primary key frame of forecast, including seq_key and seq_label.
     """
-    def __init__(self, input_settings, method='memory', nsplits=None, n_clusters=1):
+    def __init__(self, input_settings, method='memory', nsplits=None, n_clusters=1, autocorr = None):
         super(DatasetBuilder, self).__init__(input_settings)
         self.method = method
         self.nsplits = nsplits
         self.n_clusters = n_clusters
+        self.autocorr = autocorr
         
         
     def __call__(self, train_data, fcst_data, embed_data = None):
@@ -350,7 +351,7 @@ class DatasetBuilder(DataProcessing):
         if self.n_clusters > 1:
             X = data[seq_target].values.reshape((n_samples, seq_len*len(seq_target)))
             self.cluster = data[seq_key].drop_duplicates()
-            self.cluster['cluster'] = ts_kmeans(X, self.n_clusters)
+            self.cluster['cluster'] = ts_kmeans(X, self.n_clusters, self.autocorr)
         
         if len(embed_feat) > 0:
             embed_data = self.embed_label_encoder(data[seq_key].drop_duplicates(), embed_data.drop_duplicates(seq_key), embed_feat)
