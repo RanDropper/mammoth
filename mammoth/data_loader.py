@@ -228,12 +228,13 @@ class DatasetBuilder(DataProcessing):
         input_settings: <dictionary> Updated input_settings.
         prediction: <pandas.DataFrame> The primary key frame of forecast, including seq_key and seq_label.
     """
-    def __init__(self, input_settings, method='memory', nsplits=None, n_clusters=1, autocorr = None):
+    def __init__(self, input_settings, method='memory', nsplits=None, n_clusters=1, autocorr = None, freq_topk = None):
         super(DatasetBuilder, self).__init__(input_settings)
         self.method = method
         self.nsplits = nsplits
         self.n_clusters = n_clusters
         self.autocorr = autocorr
+        self.freq_topk = freq_topk
         
         
     def __call__(self, train_data, fcst_data, embed_data = None):
@@ -352,6 +353,11 @@ class DatasetBuilder(DataProcessing):
             X = data[seq_target].values.reshape((n_samples, seq_len*len(seq_target)))
             self.cluster = data[seq_key].drop_duplicates()
             self.cluster['cluster'] = ts_kmeans(X, self.n_clusters, self.autocorr)
+        if self.freq_topk is not None:
+            top_freq, top_ampt = FFT_for_Period(data[seq_target].values.reshape((n_samples, seq_len, len(seq_target))),
+                                                self.freq_topk)
+            self.input_settings['top_freq'] = top_freq
+            self.input_settings['top_ampt'] = top_ampt
         
         if len(embed_feat) > 0:
             embed_data = self.embed_label_encoder(data[seq_key].drop_duplicates(), embed_data.drop_duplicates(seq_key), embed_feat)
@@ -512,3 +518,14 @@ def compute_padding_len(seq_len, window_freq, fcst_horizon):
         return fcst_horizon - remain_count
     else:
         return 0
+
+
+def FFT_for_Period(x, k=2):
+    # [B, T, C]
+    xf = np.fft.rfft(x, dim=1)
+    # find period by amplitudes
+    frequency_list = np.mean(xf, axis=-1)
+    frequency_list[:, 0] = 0
+    top_freq = np.argsort(frequency_list)[-k:]
+    top_ampt = frequency_list[top_freq]
+    return top_freq, top_ampt

@@ -14,6 +14,7 @@ from mammoth.networks.scinet import SCINet
 from mammoth.networks.tabnet import TabNet
 from mammoth.networks.film import FiLM
 from mammoth.networks.mts_mixer import MtsMixer
+from mammoth.networks.timesnet import TimesBlock
 from mammoth.model.tsmodel import ModelBlock
 
 
@@ -377,6 +378,33 @@ class MixerEncoder(ModelBlock):
             return Concatenate()(stacked)
         else:
             return stacked[0]
+
+
+class TimesEncoder(ModelBlock):
+    def __init__(self, hp, name='TimesEncoder', **kwargs):
+        super(TimesEncoder, self).__init__(name=name, **kwargs)
+        self.hp = hp.copy()
+
+    def build(self, input_shape):
+        n_enc_layers = self.hp.get('n_enc_layers', 1)
+        nfreq = self.hp.get('nfreq', input_shape[-2]//2-1)
+        n_enc_filters = self.hp.get('n_enc_filters', 16)
+        enc_kernel_size = self.hp.get('enc_kernel_size', (2,2))
+        enc_activation = self.hp.get('enc_activation', 'swish')
+        enc_l1_regular = self.hp.get('enc_l1_regular', 0.0)
+
+        self.projection = EinsumDense(equation='bhtf,fF->bhtF',
+                                      output_shape=(input_shape[1], input_shape[2], n_enc_filters))
+        self.times_block_list = [TimesBlock(nfreq, n_enc_filters, enc_kernel_size, enc_activation, enc_l1_regular)
+                                 for _ in range(n_enc_layers)]
+        self.LN_list = [LayerNormalization() for _ in range(n_enc_layers)]
+
+    def forward(self, tensor, **kwargs):
+        tensor = self.projection(tensor)
+        for times_block, LN in zip(self.times_block_list, self.LN_list):
+            tensor = times_block(tensor)
+            tensor = LN(tensor)
+        return tensor
         
 
 class DenseDecoder(ModelBlock):
