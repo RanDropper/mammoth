@@ -388,6 +388,7 @@ class TimesEncoder(ModelBlock):
     def build(self, input_shape):
         n_enc_layers = self.hp.get('n_enc_layers', 1)
         nfreq = self.hp.get('nfreq', input_shape[-2]//2-1)
+        num_kernels = self.hp.get('num_kernels', 1)
         n_enc_filters = self.hp.get('n_enc_filters', 16)
         enc_kernel_size = self.hp.get('enc_kernel_size', (2,2))
         enc_activation = self.hp.get('enc_activation', 'swish')
@@ -395,7 +396,7 @@ class TimesEncoder(ModelBlock):
 
         self.projection = EinsumDense(equation='bhtf,fF->bhtF',
                                       output_shape=(input_shape[1], input_shape[2], n_enc_filters))
-        self.times_block_list = [TimesBlock(nfreq, n_enc_filters, enc_kernel_size, enc_activation, enc_l1_regular)
+        self.times_block_list = [TimesBlock(nfreq, num_kernels, n_enc_filters, enc_kernel_size, enc_activation, enc_l1_regular)
                                  for _ in range(n_enc_layers)]
         self.LN_list = [LayerNormalization() for _ in range(n_enc_layers)]
 
