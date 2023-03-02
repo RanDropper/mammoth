@@ -9,10 +9,11 @@ except ImportError:
 import numpy as np
 
 class temporal_interactor(Layer):
-    def __init__(self, hidden_dims, regular, **kwargs):
+    def __init__(self, hidden_dims, regular, dropout, **kwargs):
         super(temporal_interactor, self).__init__(**kwargs)
         self.hidden_dims = hidden_dims
         self.regular = regular
+        self.dropout = dropout
 
     def build(self, input_shape):
         B, H, T, F = input_shape
@@ -21,31 +22,36 @@ class temporal_interactor(Layer):
                                                  activation='gelu',
                                                  kernel_regularizer=L1(self.regular),
                                                  bias_regularizer=L1(self.regular)),
-                                     EinsumDense(equation='bhtf,ts->bhsf',
-                                                 output_shape=(H, T, F),
-                                                 activation='gelu',
-                                                 kernel_regularizer=L1(self.regular),
-                                                 bias_regularizer=L1(self.regular))])
+                               Dropout(self.dropout),
+                               EinsumDense(equation='bhtf,ts->bhsf',
+                                           output_shape=(H, T, F),
+                                           activation='gelu',
+                                           kernel_regularizer=L1(self.regular),
+                                           bias_regularizer=L1(self.regular))])
     def call(self, tensor):
         return self.FFN(tensor)
 
 
 class MtsMixer(Layer):
-    def __init__(self, n_sub_seqs, temp_hidden_dims, channel_hidden_dims, regular, **kwargs):
+    def __init__(self, n_sub_seqs, temp_hidden_dims, channel_hidden_dims, regular,
+                 temp_dropout, channel_dropout, **kwargs):
         super(MtsMixer, self).__init__(**kwargs)
         self.n_sub_seqs = n_sub_seqs
         self.temp_hidden_dims = temp_hidden_dims
         self.channel_hidden_dims = channel_hidden_dims
         self.regular = regular
+        self.temp_dropout = temp_dropout
+        self.channel_dropout = channel_dropout
 
         self._build_from_signature()
 
     def _build_from_signature(self):
-        self.FFN_list = [temporal_interactor(self.temp_hidden_dims, self.regular) for n in range(self.n_sub_seqs)]
+        self.FFN_list = [temporal_interactor(self.temp_hidden_dims, self.regular, self.temp_dropout) for _ in range(self.n_sub_seqs)]
         self.channel_interactor = Sequential([Dense(self.channel_hidden_dims,
                                                     activation='gelu',
                                                     kernel_regularizer=L1(self.regular),
                                                     bias_regularizer=L1(self.regular)),
+                                              Dropout(self.channel_dropout),
                                               Dense(self.channel_hidden_dims,
                                                     kernel_regularizer=L1(self.regular),
                                                     bias_regularizer=L1(self.regular))])

@@ -366,7 +366,10 @@ class MixerEncoder(ModelBlock):
         temp_hidden_dims = self.hp.get('temp_hidden_dims', 16)
         channel_hidden_dims = self.hp.get('channel_hidden_dims', 8)
         enc_l1_regular = self.hp.get('enc_l1_regular', 0.0)
-        self.mixer_list = [MtsMixer(n_sub_seqs, temp_hidden_dims, channel_hidden_dims, enc_l1_regular) for n in range(n_blocks)]
+        temp_dropout = self.hp.get('temp_dropout', 0.0)
+        channel_dropout = self.hp.get('channel_dropout', 0.0)
+        self.mixer_list = [MtsMixer(n_sub_seqs, temp_hidden_dims, channel_hidden_dims, enc_l1_regular,
+                                    temp_dropout, channel_dropout) for _ in range(n_blocks)]
 
     def forward(self, tensor, **kwargs):
         stacked = []
@@ -520,17 +523,20 @@ class MlpOutput(ModelBlock):
         mlp_dims = self.hp.get('mlp_dims', [16])
         mlp_activation = self.hp.get('mlp_activation', 'swish')
         mlp_l1_regular = self.hp.get('mlp_l1_regular', 0)
+        mlp_dropout = self.hp.get('mlp_dropout', 0)
 
         self.dense_list = [Dense(mlp_dims[i],
                                  activation = mlp_activation,
                                  kernel_regularizer = L1(mlp_l1_regular),
                                  name = '{}_mlp_{}'.format(self.name, i))
                            for i in range(len(mlp_dims))]
+        self.dropout_list = [Dropout(mlp_dropout) for _ in range(len(mlp_dims))]
         self.out_dense = Dense(1, use_bias=False, name='{}_output'.format(self.name))
         
     def forward(self, tensor, **kwargs):
-        for dense in self.dense_list:
+        for dense, dropout in zip(self.dense_list, self.dropout_list):
             tensor = dense(tensor)
+            tensor = dropout(tensor)
         
         output = self.out_dense(tensor)
         
