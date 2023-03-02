@@ -363,7 +363,7 @@ class MixerEncoder(ModelBlock):
     def _build_from_signature(self):
         n_blocks = self.hp.get('n_blocks', 1)
         n_sub_seqs = self.hp.get('n_sub_seqs', 2)
-        temp_hidden_dims = self.hp.get('tmp_hidden_dims', 16)
+        temp_hidden_dims = self.hp.get('temp_hidden_dims', 16)
         channel_hidden_dims = self.hp.get('channel_hidden_dims', 8)
         enc_l1_regular = self.hp.get('enc_l1_regular', 0.0)
         self.mixer_list = [MtsMixer(n_sub_seqs, temp_hidden_dims, channel_hidden_dims, enc_l1_regular) for n in range(n_blocks)]
