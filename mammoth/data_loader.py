@@ -266,8 +266,7 @@ class DatasetBuilder(DataProcessing):
                                                                     embed_data if embed_data is None else embed_data.merge(key_frame),
                                                                     val_data if val_data is None else val_data.merge(key_frame),
                                                                     fcst_data.merge(key_frame),
-                                                                    fcst_embed_data.merge(key_frame),
-                                                                    key_frame.shape[0])
+                                                                    fcst_embed_data.merge(key_frame))
                     train_dataset.append(tmp_train_dataset)
                     val_dataset.append(tmp_val_dataset)
                     fcst_dataset.append(tmp_fcst_dataset)
@@ -275,8 +274,7 @@ class DatasetBuilder(DataProcessing):
             else:
                 train_dataset, \
                 val_dataset, \
-                fcst_dataset = self.build_dataset_in_memory(train_data, embed_data, val_data, fcst_data, fcst_embed_data,
-                                                            self.input_settings['n_train_samples'])
+                fcst_dataset = self.build_dataset_in_memory(train_data, embed_data, val_data, fcst_data, fcst_embed_data)
 
         self.input_settings['is_dsbuilt'] = True
         return train_dataset, val_dataset, fcst_dataset, self.input_settings, prediction
@@ -294,16 +292,16 @@ class DatasetBuilder(DataProcessing):
             raise NotImplementedError("The {} has duplicated rows: \n {}".format(name, count))
 
 
-    def build_dataset_in_memory(self, train_data, embed_data, val_data, fcst_data, fcst_embed_data, n_samples):
+    def build_dataset_in_memory(self, train_data, embed_data, val_data, fcst_data, fcst_embed_data):
         train_dataset = self.convert_to_dataset_in_memory(train_data,
                                                           embed_data,
-                                                          n_samples,
+                                                          self.input_settings['n_train_samples'],
                                                           self.input_settings['train_seq_len'])
 
         if self.input_settings.get('val_rate') is not None:
             val_dataset = self.convert_to_dataset_in_memory(val_data,
                                                             embed_data,
-                                                            n_samples,
+                                                            self.input_settings['n_train_samples'],
                                                             self.input_settings['val_seq_len'],
                                                             remainder=self.input_settings['remainder'])
         else:
@@ -311,7 +309,7 @@ class DatasetBuilder(DataProcessing):
 
         fcst_dataset = self.convert_to_fcst_dataset_in_memory(fcst_data,
                                                               fcst_embed_data,
-                                                              n_samples,
+                                                              self.input_settings['n_fcst_samples'],
                                                               self.input_settings['fcst_seq_len'])
         return train_dataset, val_dataset, fcst_dataset
 
@@ -391,8 +389,7 @@ class DatasetBuilder(DataProcessing):
         
         return train_data, val_data, embed_data, his_data
 
-    
-    
+
     def fcst_data_process(self, fcst_data, his_data, embed_data):
         seq_key = self.input_settings['seq_key']
         seq_label = self.input_settings['seq_label']
@@ -429,6 +426,8 @@ class DatasetBuilder(DataProcessing):
         
         if len(norm_feat) > 0:
             data = self.normalization(data, seq_key, norm_feat)
+
+        self.input_settings['n_fcst_samples'] = n_samples
         
         return data, embed_data, fcst_data[seq_key + seq_label]
     

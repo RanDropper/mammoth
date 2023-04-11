@@ -15,6 +15,7 @@ from mammoth.networks.tabnet import TabNet
 from mammoth.networks.film import FiLM
 from mammoth.networks.mts_mixer import MtsMixer
 from mammoth.networks.timesnet import TimesBlock
+from mammoth.networks.GAT import SpatialAttention
 from mammoth.model.tsmodel import ModelBlock
 
 
@@ -611,3 +612,30 @@ class TabnetOutput(ModelBlock):
         self.added_loss = entropy_loss
         
         return output
+
+
+class GAT(ModelBlock):
+    def __init__(self, hp, name='GAT', **kwargs):
+        super(GAT, self).__init__(name = name, **kwargs)
+        self.hp = hp.copy()
+
+    def build(self, input_shape):
+        self.graph_attn_layers = self.hp.get('graph_attn_layers', 1)
+        self.graph_num_heads = self.hp.get('graph_num_heads', 4)
+        self.graph_k_dim = self.hp.get('graph_k_dim', 8)
+        self.graph_v_dim = self.hp.get('graph_v_dim', 8)
+        self.attn_l1_regular = self.hp.get('attn_l1_regular', 0.0)
+        self.attn_dropout = self.hp.get('attn_dropout', 0.0)
+
+        self.spatial_attn_list = [SpatialAttention(num_heads = self.graph_num_heads,
+                                                   k_dim = self.graph_k_dim,
+                                                   v_dim = self.graph_v_dim,
+                                                   attn_l1_regular = self.attn_l1_regular,
+                                                   attn_dropout = self.attn_dropout,
+                                                   name = '{}_spatial_attn_{}'.format(self.name, i))
+                                  for i in range(self.graph_attn_layers)]
+
+    def forward(self, tensor, **kwargs):
+        for tmp_layer in self.spatial_attn_list:
+            tensor, scores = tmp_layer(tensor, tensor, tensor)
+        return (tensor, scores)

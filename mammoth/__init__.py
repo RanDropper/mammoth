@@ -3,7 +3,8 @@ from mammoth.data_loader import DatasetBuilder as dsbuilder
 from mammoth.utils import tf_ignore_warnings
 
 def single_tsm(input_settings, train_settings, 
-               embedding = {'SimpleEmbedding':{}}, 
+               embedding = {'SimpleEmbedding':{}},
+               graph = {'GAT':{}},
                encoder = {'WavenetEncoder':{}}, 
                decoder = {'DenseDecoder':{}}, 
                recoder = {'ConvRecoder':{}}, 
@@ -110,8 +111,8 @@ def single_tsm(input_settings, train_settings,
     if perc_horizon is not None:
         hyper_params.update({'perc_horizon':perc_horizon})
 
-    for part_name, part in zip(['Embedding', 'Encoder', 'Decoder', 'Recoder', 'Output'],
-                               [embedding, encoder, decoder, recoder, output]):
+    for part_name, part in zip(['Embedding', 'Graph', 'Encoder', 'Decoder', 'Recoder', 'Output'],
+                               [embedding, graph, encoder, decoder, recoder, output]):
         if part is not None:
             hyper_params.update( list(part.values())[0] )
             flow_blocks[part_name] = list(part.keys())[0]

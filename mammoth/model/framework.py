@@ -71,6 +71,7 @@ class ModelBase(ModelPipeline):
         else:
             self._TSInNorms = None
         self._SplitHisFut = self._init_model_block('SplitHisFut', hp)
+        self._Graph = self._init_model_block(flow_blocks.get('Graph'), hp)
         self._Encoder = self._init_model_block(flow_blocks.get('Encoder'), hp)
         self._Decoder = self._init_model_block(flow_blocks.get('Decoder'), hp)
         self._Recoder = self._init_model_block(flow_blocks.get('Recoder'), hp)
@@ -108,6 +109,10 @@ class ModelBase(ModelPipeline):
         enc_scaled = Multiply(
             name='encoder_input_multiply_masking_{}'.format(self.built_times)
         )([enc_scaled, his_masking])
+
+        if self._Graph is not None:
+            enc_scaled, adj_matrix = self._Graph(enc_scaled)
+
         if self._Encoder is not None:
             enc_output = self._Encoder(enc_scaled, is_fcst = is_fcst)
             enc_output = Sliced(enc_output)
