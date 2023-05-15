@@ -6,6 +6,10 @@ try:
     from tensorflow.keras.layers import EinsumDense
 except ImportError:
     from tensorflow.keras.layers.experimental import EinsumDense
+try:
+    from tensorflow.keras.activations import gelu
+except ImportError:
+    from mammoth.utils import gelu
 import numpy as np
 
 class temporal_interactor(Layer):
@@ -19,13 +23,13 @@ class temporal_interactor(Layer):
         B, H, T, F = input_shape
         self.FFN = Sequential([EinsumDense(equation='bhtf,ts->bhsf',
                                                  output_shape=(H, self.hidden_dims, F),
-                                                 activation='gelu',
+                                                 activation=gelu,
                                                  kernel_regularizer=L1(self.regular),
                                                  bias_regularizer=L1(self.regular)),
                                Dropout(self.dropout),
                                EinsumDense(equation='bhtf,ts->bhsf',
                                            output_shape=(H, T, F),
-                                           activation='gelu',
+                                           activation=gelu,
                                            kernel_regularizer=L1(self.regular),
                                            bias_regularizer=L1(self.regular))])
     def call(self, tensor):
@@ -48,7 +52,7 @@ class MtsMixer(Layer):
     def _build_from_signature(self):
         self.FFN_list = [temporal_interactor(self.temp_hidden_dims, self.regular, self.temp_dropout) for _ in range(self.n_sub_seqs)]
         self.channel_interactor = Sequential([Dense(self.channel_hidden_dims,
-                                                    activation='gelu',
+                                                    activation=gelu,
                                                     kernel_regularizer=L1(self.regular),
                                                     bias_regularizer=L1(self.regular)),
                                               Dropout(self.channel_dropout),

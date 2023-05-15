@@ -2,7 +2,10 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer, Conv1D, Conv3D, Concatenate, Dropout, Reshape, ZeroPadding2D, Softmax
 from tensorflow.keras.regularizers import L1
 from tensorflow.keras import Sequential
-from tensorflow.keras.activations import gelu
+try:
+    from tensorflow.keras.activations import gelu
+except ImportError:
+    from mammoth.utils import gelu
 try:
     from tensorflow.keras.layers import EinsumDense
 except ImportError:

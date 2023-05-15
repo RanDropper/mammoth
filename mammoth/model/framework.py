@@ -57,25 +57,25 @@ class ModelBase(ModelPipeline):
         is_fork = hp.get('is_fork', False)
 
         if not is_fork:
-            self._MwTransform = self._init_model_block('MovingWindowTransform', hp)
+            self._MwTransform = self._init_model_block({'MovingWindowTransform':hp})
         else:
             self._MwTransform = None
         if norm_feat is not None:
             self._TSInNorms = []
             for method in norm_feat.keys():
                 self._TSInNorms.append(
-                    self._init_model_block('TSInstanceNormalization', hp,
+                    self._init_model_block({'TSInstanceNormalization':hp},
                                            name_suffix=method,
                                            norm_method=method)
                 )
         else:
             self._TSInNorms = None
-        self._SplitHisFut = self._init_model_block('SplitHisFut', hp)
-        self._Graph = self._init_model_block(flow_blocks.get('Graph'), hp)
-        self._Encoder = self._init_model_block(flow_blocks.get('Encoder'), hp)
-        self._Decoder = self._init_model_block(flow_blocks.get('Decoder'), hp)
-        self._Recoder = self._init_model_block(flow_blocks.get('Recoder'), hp)
-        self._Output = self._init_model_block(flow_blocks.get('Output'), hp)
+        self._SplitHisFut = self._init_model_block({'SplitHisFut':hp})
+        self._Graph = self._init_model_block(flow_blocks.get('Graph'))
+        self._Encoder = self._init_model_block(flow_blocks.get('Encoder'))
+        self._Decoder = self._init_model_block(flow_blocks.get('Decoder'))
+        self._Recoder = self._init_model_block(flow_blocks.get('Recoder'))
+        self._Output = self._init_model_block(flow_blocks.get('Output'))
     
 
     def single_tsmodel(self, hp, seq_input, embed_input, masking, remainder, is_fcst):
@@ -164,7 +164,7 @@ class ModelBase(ModelPipeline):
 
     @tf.autograph.experimental.do_not_convert
     def NN(self, seq_input, embed_input, masking, remainder = None, is_fcst = False):
-        self._Embedding = self._init_model_block(self.hyper_params['flow_blocks'].get('Embedding'), self.hyper_params)
+        self._Embedding = self._init_model_block(self.hyper_params['flow_blocks'].get('Embedding'))
         self._build_model_blocks(self.hyper_params)
         
         if embed_input is not None:
@@ -201,19 +201,29 @@ class ModelBase(ModelPipeline):
                 norm_col_idx = [dynamic_feat.index(i) for i in cols]
                 self.hyper_params['{}_norm_idx'.format(method)] = norm_col_idx
 
+        update_hp = self.hyper_params.copy()
+        update_hp.pop('flow_blocks')
+        for key, value in self.hyper_params['flow_blocks'].items():
+            if value is not None:
+                sub_key = list(value.keys())[0]
+                self.hyper_params['flow_blocks'][key][sub_key].update(update_hp)
+
 
     def _update_model_name(self):
         if self.name is None:
-            encoder = self.hyper_params['flow_blocks'].get('Encoder')
+            encoder = list(self.hyper_params['flow_blocks'].get('Encoder').keys())[0]
             if isinstance(encoder, str):
                 self.name = encoder.replace('Encoder', '')
             else:
                 self.name = encoder.name.replace('Encoder', '')
     
     
-    def _init_model_block(self, mb, hp, name_suffix=None, **kwargs):
-        if mb is None:
+    def _init_model_block(self, dictionary, name_suffix=None, **kwargs):
+        if dictionary is None:
             return None
+
+        mb = list(dictionary.keys())[0]
+        hp = dictionary[mb]
         
         if isinstance(mb, str):
             tmp_block = eval(mb)
@@ -230,7 +240,141 @@ class ModelBase(ModelPipeline):
             self.added_loss += tmp_block.added_loss
         
         return tmp_block
-    
+
+
+class ExplanableModel(ModelBase):
+    def __init__(self, input_settings, hyper_params, train_settings, name=None):
+        super(ExplanableModel, self).__init__(input_settings, hyper_params, train_settings, name)
+
+    def _build_model_blocks(self, hp):
+        flow_blocks = hp.get('flow_blocks')
+        norm_feat = hp.get('norm_feat')
+        is_fork = hp.get('is_fork', False)
+
+        if not is_fork:
+            self._MwTransform = self._init_model_block({'MovingWindowTransform':hp})
+        else:
+            self._MwTransform = None
+        if norm_feat is not None:
+            self._TSInNorms = []
+            for method in norm_feat.keys():
+                self._TSInNorms.append(
+                    self._init_model_block({'TSInstanceNormalization':hp},
+                                           name_suffix=method,
+                                           norm_method=method)
+                )
+        else:
+            self._TSInNorms = None
+        self._SplitHisFut = self._init_model_block({'SplitHisFut':hp})
+
+        self._block_transform_list = []
+        for block in flow_blocks:
+            self._block_transform_list.append(self._init_model_block(block))
+
+    def explanable_tsmodel(self, hp, seq_input, embed_input, masking, remainder, is_fcst):
+        perc_horizon = hp.get('perc_horizon')
+
+        if perc_horizon > self.input_settings.get('perc_horizon'):
+            print(
+                "warnings: The tsmodel '{}' has perception horizon {}, which is larger than that defined in data processing.".format(
+                    self.name, perc_horizon))
+
+        if self._MwTransform is not None:
+            seq_input, masking = self._MwTransform(seq_input, masking=masking, is_fcst=is_fcst)
+
+        if self._TSInNorms is not None:
+            for TSIN in self._TSInNorms:
+                seq_input = TSIN(seq_input, masking=masking)
+
+        enc_input, \
+        dec_input, \
+        his_masking, \
+        fut_masking = self._SplitHisFut(seq_input, masking=masking,
+                                        dynamic_feat=self.input_settings['dynamic_feat'],
+                                        seq_target=self.input_settings['seq_target'],
+                                        enc_feat=self.input_settings['enc_feat'],
+                                        dec_feat=self.input_settings['dec_feat'],
+                                        is_fcst=is_fcst,
+                                        remainder=remainder)
+
+        revin = RevIN(hp.get('is_y_affine', True), name='RevIN_{}'.format(self.built_times))
+        enc_scaled, y_mean, y_std = revin(enc_input, his_masking)
+
+        Sliced = Lambda(lambda x: x[:, -fut_masking.shape[1]:, :],
+                        name='slice_encoder_output_{}'.format(self.built_times))
+        enc_scaled = Multiply(
+            name='encoder_input_multiply_masking_{}'.format(self.built_times)
+        )([enc_scaled, his_masking])
+
+        if self._Graph is not None:
+            enc_scaled, adj_matrix = self._Graph(enc_scaled)
+
+        if self._Encoder is not None:
+            enc_output = self._Encoder(enc_scaled, is_fcst=is_fcst)
+            enc_output = Sliced(enc_output)
+        else:
+            enc_output = Sliced(enc_scaled)
+
+        if len(enc_output.shape) == 3:
+            enc_output = tf.expand_dims(enc_output, axis=2)
+
+        if self._Decoder is not None:
+            enc_decoder = self._Decoder(enc_output, is_fcst=is_fcst)
+        else:
+            enc_decoder = enc_output
+
+        outlayer_input = [enc_decoder]
+
+        if dec_input is not None:
+            dec_input = Multiply(
+                name='decoder_input_multiply_masking_{}'.format(self.built_times)
+            )([dec_input, fut_masking])
+            if self._Recoder is None:
+                outlayer_input.append(dec_input)
+            else:
+                outlayer_input.append(self._Recoder(dec_input, is_fcst=is_fcst))
+
+        if embed_input is not None:
+            _, T, F, E = fut_masking.shape
+            embed_input = tf.tile(Reshape(
+                (1, 1, embed_input.shape[-1]), name='expand_embed_input_dims_{}'.format(self.built_times)
+            )(embed_input), [1, T, F, 1], name='repeat_embed_feat_{}'.format(self.built_times))
+            outlayer_input.append(embed_input)
+
+        if len(outlayer_input) > 1:
+            outlayer_input = Concatenate(
+                name='concat_all_decoder_feats_{}'.format(self.built_times)
+            )(outlayer_input)
+        else:
+            outlayer_input = outlayer_input[0]
+
+        outlayer_input = Multiply(
+            name='outlayer_input_multiply_masking_{}'.format(self.built_times)
+        )([outlayer_input, fut_masking])
+        scaled_output = self._Output(outlayer_input, is_fcst=is_fcst)
+
+        output = revin.denormalize(scaled_output, y_mean, y_std)
+
+        return output
+
+    @tf.autograph.experimental.do_not_convert
+    def NN(self, seq_input, embed_input, masking, remainder=None, is_fcst=False):
+        self._Embedding = self._init_model_block(*list(self.hyper_params['embedding'].items())[0])
+        self._build_model_blocks(self.hyper_params)
+
+        if embed_input is not None:
+            if self._Embedding is not None:
+                embed_tensor = self._Embedding(embed_input, is_fcst=is_fcst)
+            else:
+                embed_tensor = embed_input
+        else:
+            embed_tensor = None
+
+        output = self.explanable_tsmodel(self.hyper_params, seq_input, embed_tensor, masking, remainder, is_fcst)
+        output = Lambda(lambda x: x, name='output')(output)
+
+        return output
+
     
     
 class ModelStack(ModelBase):

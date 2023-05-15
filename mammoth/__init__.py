@@ -114,8 +114,7 @@ def single_tsm(input_settings, train_settings,
     for part_name, part in zip(['Embedding', 'Graph', 'Encoder', 'Decoder', 'Recoder', 'Output'],
                                [embedding, graph, encoder, decoder, recoder, output]):
         if part is not None:
-            hyper_params.update( list(part.values())[0] )
-            flow_blocks[part_name] = list(part.keys())[0]
+            flow_blocks[part_name] = part
         else:
             flow_blocks[part_name] = None
 
@@ -149,4 +148,46 @@ def stack_tsm(model_lists, stack_hp, is_pretrain = True, pretrain_epoch = 10):
     tsms = ModelStack(input_settings, train_settings, model_lists, stack_hp, is_pretrain, pretrain_epoch)
     tsms.model = tsms.build()
     
-    return tsms 
+    return tsms
+
+
+def explanable_tsm(input_settings, train_settings, equation,
+                   embedding = {'SimpleEmbedding':{}},
+                   flow_blocks = [],
+                   norm_feat=None,
+                   perc_horizon=None,
+                   is_fork=False,
+                   is_y_affine=True,
+                   is_feat_affine=True):
+    if not isinstance(equation, str):
+        raise NotImplementedError('The input parameter "equation" should be a string.')
+
+    vars = []
+    opts = []
+    Str = ''
+    for s in equation:
+        if s.isalpha():
+            Str += s
+        else:
+            vars.append(Str)
+            opts.append(s)
+            Str = ''
+
+    hyper_params = {'flow_blocks':flow_blocks,
+                    'variables':vars,
+                    'operators':opts,
+                    'embedding':embedding,
+                    'is_fork': is_fork, 'is_y_affine': is_y_affine, 'is_feat_affine': is_feat_affine}
+
+    if not input_settings.get('is_dsbuilt', False):
+        raise NotImplementedError('The input parameter "input_settings" is not passed through function "dsbuilder". '
+                                  '"dsbuilder" function will return the variable "input_settings", which should be used here.')
+    if norm_feat is not None:
+        hyper_params.update({'norm_feat': norm_feat})
+    if perc_horizon is not None:
+        hyper_params.update({'perc_horizon': perc_horizon})
+
+    tsm = ModelBase(input_settings, hyper_params, train_settings)
+    tsm.model = tsm.build()
+
+    return tsm

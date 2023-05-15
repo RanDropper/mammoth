@@ -1,6 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras.layers import Layer, Softmax
 from tensorflow.keras import backend as k
+from tensorflow.python.util.tf_export import tf_export
+from tensorflow.python.framework import ops
+from tensorflow.python.ops import math_ops
 import numpy as np
 
 
@@ -11,6 +14,23 @@ def glu(x, n_units=None):
 
     return x[..., :n_units] * tf.nn.sigmoid(x[..., n_units:])
 
+
+@tf_export("nn.gelu", v1=[])
+def gelu(features, approximate=False, name=None):
+  with ops.name_scope(name, "Gelu", [features]):
+    features = ops.convert_to_tensor(features, name="features")
+    if not features.dtype.is_floating:
+      raise ValueError(
+          "`features.dtype` must be a floating point tensor."
+          f"Received:features.dtype={features.dtype}")
+    if approximate:
+      coeff = math_ops.cast(0.044715, features.dtype)
+      return 0.5 * features * (
+          1.0 + math_ops.tanh(0.7978845608028654 *
+                              (features + coeff * math_ops.pow(features, 3))))
+    else:
+      return 0.5 * features * (1.0 + math_ops.erf(
+          features / math_ops.cast(1.4142135623730951, features.dtype)))
 
 
 def sparsemax(logits, axis):
