@@ -58,7 +58,12 @@ class TSModel(Model):
                 loss_t = self.compute_loss(x, y, y_pred_t, sample_weight)
                 loss = tf.abs(loss - loss_t + self.epsilon)+loss_t
 
-        self.optimizer.minimize(loss, self.trainable_variables, tape=tape)
+        try:
+            self.optimizer.minimize(loss, self.trainable_variables, tape=tape)
+        except TypeError:
+            gradients = tape.gradient(loss, self.trainable_variables)
+            self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
         if (self.error_bound) and (Eloss<=self.loss_threshold):
             self.ema_weights_interactive()
         return self.compute_metrics(x, y, y_pred, sample_weight)
