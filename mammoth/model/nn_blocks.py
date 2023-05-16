@@ -629,12 +629,14 @@ class GAT(ModelBlock):
         self.graph_v_dim = self.hp.get('graph_v_dim', 8)
         self.attn_l1_regular = self.hp.get('attn_l1_regular', 0.0)
         self.attn_dropout = self.hp.get('attn_dropout', 0.0)
+        self.is_dynamic = self.hp.get('is_dynamic', True)
 
         self.spatial_attn_list = [SpatialAttention(num_heads = self.graph_num_heads,
                                                    k_dim = self.graph_k_dim,
                                                    v_dim = self.graph_v_dim,
                                                    attn_l1_regular = self.attn_l1_regular,
                                                    attn_dropout = self.attn_dropout,
+                                                   is_dynamic = self.is_dynamic,
                                                    name = '{}_spatial_attn_{}'.format(self.name, i))
                                   for i in range(self.graph_attn_layers)]
 

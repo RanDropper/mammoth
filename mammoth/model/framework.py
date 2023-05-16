@@ -76,6 +76,10 @@ class ModelBase(ModelPipeline):
         self._Decoder = self._init_model_block(flow_blocks.get('Decoder'))
         self._Recoder = self._init_model_block(flow_blocks.get('Recoder'))
         self._Output = self._init_model_block(flow_blocks.get('Output'))
+        if flow_blocks.get('Graph') is None:
+            self.is_graph_dynamic = False
+        else:
+            self.is_graph_dynamic = flow_blocks.get('Graph').get('is_dynamic', True)
     
 
     def single_tsmodel(self, hp, seq_input, embed_input, masking, remainder, is_fcst):
@@ -110,7 +114,7 @@ class ModelBase(ModelPipeline):
             name='encoder_input_multiply_masking_{}'.format(self.built_times)
         )([enc_scaled, his_masking])
 
-        if self._Graph is not None:
+        if (self._Graph is not None) and (self.is_graph_dynamic):
             enc_scaled, adj_matrix = self._Graph(enc_scaled)
 
         if self._Encoder is not None:
@@ -121,6 +125,9 @@ class ModelBase(ModelPipeline):
 
         if len(enc_output.shape) == 3:
             enc_output = tf.expand_dims(enc_output, axis=2)
+
+        if (self._Graph is not None) and (not self.is_graph_dynamic):
+            enc_output, adj_matrix = self._Graph(enc_output)
 
         if self._Decoder is not None:
             enc_decoder = self._Decoder(enc_output, is_fcst = is_fcst)
