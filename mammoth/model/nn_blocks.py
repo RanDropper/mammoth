@@ -525,6 +525,7 @@ class MlpOutput(ModelBlock):
         mlp_activation = self.hp.get('mlp_activation', 'swish')
         mlp_l1_regular = self.hp.get('mlp_l1_regular', 0)
         mlp_dropout = self.hp.get('mlp_dropout', 0)
+        out_activation = self.hp.get('out_activation', None)
 
         self.dense_list = [Dense(mlp_dims[i],
                                  activation = mlp_activation,
@@ -532,7 +533,7 @@ class MlpOutput(ModelBlock):
                                  name = '{}_mlp_{}'.format(self.name, i))
                            for i in range(len(mlp_dims))]
         self.dropout_list = [Dropout(mlp_dropout) for _ in range(len(mlp_dims))]
-        self.out_dense = Dense(1, use_bias=False, name='{}_output'.format(self.name))
+        self.out_dense = Dense(1, activation=out_activation, use_bias=False, name='{}_output'.format(self.name))
         
     def forward(self, tensor, **kwargs):
         for dense, dropout in zip(self.dense_list, self.dropout_list):
@@ -556,6 +557,7 @@ class AttentionOutput(ModelBlock):
         dec_attn_layers = self.hp.get('dec_attn_layers', 1)
         attn_dropout = self.hp.get('attn_dropout', 0)
         de_stationary = self.hp.get('de_stationary', True)
+        out_activation = self.hp.get('out_activation', None)
 
         self.full_attn_list = [FullAttention(num_heads, k_dim, input_shape[-1],
                                              attn_dropout = attn_dropout,
@@ -564,7 +566,7 @@ class AttentionOutput(ModelBlock):
                                for i in range(dec_attn_layers)]
         self.LN_list = [LayerNormalization(name = '{}_LN_{}'.format(self.name, i))
                         for i in range(dec_attn_layers)]
-        self.out_dense = Dense(1, use_bias=False, name='{}_output'.format(self.name))
+        self.out_dense = Dense(1, activation = out_activation, use_bias=False, name='{}_output'.format(self.name))
 
     def forward(self, tensor, **kwargs):
         for L, full_attn in enumerate(self.full_attn_list):
@@ -590,6 +592,7 @@ class TabnetOutput(ModelBlock):
         norm_type = self.hp.get('norm_type', 'group')
         num_groups = self.hp.get('num_groups', 2)
         virtual_batch_size = self.hp.get('virtual_batch_size', 8)
+        out_activation = self.hp.get('out_activation', None)
 
         self.tabnet = TabNet(feature_dim = tab_feat_dim,
                              output_dim = decision_out_dim,
@@ -601,7 +604,7 @@ class TabnetOutput(ModelBlock):
                              num_groups = num_groups,
                              virtual_batch_size = virtual_batch_size,
                              name = '{}_tabnet'.format(self.name))
-        self.out_dense = Dense(1, use_bias=False, name='{}_output'.format(self.name))
+        self.out_dense = Dense(1, activation=out_activation, use_bias=False, name='{}_output'.format(self.name))
 
         
     def forward(self, tensor, **kwargs):
