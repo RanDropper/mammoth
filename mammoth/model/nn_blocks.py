@@ -454,13 +454,19 @@ class DenseDecoder(ModelBlock):
     def build(self, input_shape):
         fcst_len = self.hp.get('fcst_horizon')
         activation = self.hp.get('dec_activation', 'swish')
+        dropout = self.hp.get('dec_dropout', 0.)
+        regular = self.hp.get('dec_regular', 0.)
 
+        self.Dropout = Dropout(dropout)
         self.dense = EinsumDense(equation = 'btle,lf->btfe',
                                  output_shape = (None, fcst_len, input_shape[-1]),
                                  activation = activation,
+                                 kernel_regularizer = L1(regular),
+                                 bias_regularizer = L1(regular),
                                  name = '{}_out'.format(self.name))
         
     def forward(self, tensor, **kwargs):
+        tensor = self.Dropout(tensor)
         tensor = self.dense(tensor)
         return tensor
 
