@@ -16,6 +16,7 @@ from mammoth.networks.film import FiLM
 from mammoth.networks.mts_mixer import MtsMixer
 from mammoth.networks.timesnet import TimesBlock
 from mammoth.networks.GAT import SpatialAttention
+from mammoth.networks.TiDE import TiDE
 from mammoth.model.tsmodel import ModelBlock
 
 
@@ -410,7 +411,40 @@ class TimesEncoder(ModelBlock):
             tensor = times_block(tensor)
             tensor = LN(tensor)
         return tensor
-        
+
+
+class TideEncoder(ModelBlock):
+    def __init__(self, hp, name='TideEncoder', **kwargs):
+        super(TideEncoder, self).__init__(name = name, **kwargs)
+        self.hp = hp.copy()
+
+    def build(self, input_shape):
+        feat_proj_unit = self.hp.get('feat_proj_unit', 4)
+        n_enc_layers = self.hp.get('n_enc_layers', 2)
+        enc_unit = self.hp.get('enc_unit', 16)
+        n_dec_layers = self.hp.get('n_dec_layers', 2)
+        dec_unit = self.hp.get('dec_unit', 4)
+        enc_out_unit = self.hp.get('enc_out_unit', 4)
+        enc_dropout = self.hp.get('enc_dropout', 0)
+        enc_regular = self.hp.get('enc_regualr', 0)
+
+        self.tide_block = TiDE(feat_proj_unit=feat_proj_unit,
+                               n_enc_layers=n_enc_layers,
+                               enc_unit=enc_unit,
+                               n_dec_layers=n_dec_layers,
+                               dec_unit=dec_unit,
+                               out_unit=enc_out_unit,
+                               dropout=enc_dropout,
+                               regular=enc_regular)
+
+    def forward(self, tensor, **kwargs):
+        y_len = kwargs.get('n_target')
+        feat_len = kwargs.get('n_enc_feat')
+        y = tf.gather(tensor, [i for i in range(y_len)], axis=-1)
+        feat = tf.gather(tensor, [i for i in range(y_len, y_len+feat_len)], axis=-1)
+        attr = tf.gather(tensor, [i for i in range(y_len+feat_len, tensor.shape[-1])], axis=-1)[:,:,0:1,:]
+        return self.tide_block(y, attr, feat)
+
 
 class DenseDecoder(ModelBlock):
     def __init__(self, hp, name='DenseDecoder', **kwargs):

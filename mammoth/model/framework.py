@@ -27,6 +27,9 @@ class ModelBase(ModelPipeline):
         
         self._update_hp()
         self._update_model_name()
+
+        self.n_target = len(self.input_settings['seq_target'])
+        self.n_enc_feat = len(self.input_settings['enc_feat'])
         
         
     def _default_train_settings(self):
@@ -114,11 +117,22 @@ class ModelBase(ModelPipeline):
             name='encoder_input_multiply_masking_{}'.format(self.built_times)
         )([enc_scaled, his_masking])
 
+        if embed_input is not None:
+            _, T, L, E = his_masking.shape
+            embed_input = tf.tile(Reshape(
+                (1,1,embed_input.shape[-1]), name='expand_embed_input_dims_{}'.format(self.built_times)
+            )(embed_input), [1, T, L, 1], name = 'repeat_embed_feat_{}'.format(self.built_times))
+            enc_scaled = Concatenate(
+                name='concat_embed_features_{}'.format(self.built_times)
+            )([enc_scaled, embed_input])
+
         if (self._Graph is not None) and (self.is_graph_dynamic):
             enc_scaled, adj_matrix = self._Graph(enc_scaled)
 
         if self._Encoder is not None:
-            enc_output = self._Encoder(enc_scaled, is_fcst = is_fcst)
+            enc_output = self._Encoder(enc_scaled, is_fcst = is_fcst,
+                                       n_target = self.n_target,
+                                       n_enc_feat = self.n_enc_feat)
             enc_output = Sliced(enc_output)
         else:
             enc_output = Sliced(enc_scaled)
@@ -144,13 +158,6 @@ class ModelBase(ModelPipeline):
                 outlayer_input.append(dec_input)
             else:
                 outlayer_input.append(self._Recoder(dec_input, is_fcst = is_fcst))
-        
-        if embed_input is not None:
-            _, T, F, E = fut_masking.shape
-            embed_input = tf.tile(Reshape(
-                (1,1,embed_input.shape[-1]), name='expand_embed_input_dims_{}'.format(self.built_times)
-            )(embed_input), [1, T, F, 1], name = 'repeat_embed_feat_{}'.format(self.built_times))
-            outlayer_input.append(embed_input)
                 
         if len(outlayer_input) > 1:
             outlayer_input = Concatenate(

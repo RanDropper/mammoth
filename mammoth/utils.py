@@ -203,4 +203,7 @@ def scatter_update(tensor, indices, updates, axis=-1):
 
 
 def tf_ignore_warnings():
-    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+    try:
+        tf.autograph.set_verbosity(1)
+    except:
+        tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
